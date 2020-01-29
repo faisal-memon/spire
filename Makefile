@@ -125,6 +125,7 @@ protos := \
 	proto/spire/agent/keymanager/keymanager.proto \
 	proto/spire/agent/nodeattestor/nodeattestor.proto \
 	proto/spire/agent/workloadattestor/workloadattestor.proto \
+	proto/spire/api/issuer/issuer.proto \
 	proto/spire/api/node/node.proto \
 	proto/spire/api/registration/registration.proto \
 	proto/spire/common/common.proto \
@@ -139,6 +140,9 @@ protos := \
 	proto/spire/server/notifier/notifier.proto \
 	proto/spire/server/upstreamauthority/upstreamauthority.proto \
 	proto/spire/server/upstreamca/upstreamca.proto \
+	proto/spire/type/attestation.proto \
+	proto/spire/type/svid/jwtsvid.proto \
+	proto/spire/type/svid/x509svid.proto \
 	pkg/common/catalog/test/test.proto \
 	pkg/server/ca/journal.proto \
 
