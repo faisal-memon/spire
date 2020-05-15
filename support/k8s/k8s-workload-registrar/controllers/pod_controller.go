@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"reflect"
 
 	"github.com/go-logr/logr"
 	spiffeidv1beta1 "github.com/spiffe/spire/api/spiffecrd/v1beta1"
@@ -83,9 +84,6 @@ type PodReconciler struct {
 	ctlr *PodController
 }
 
-// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;update;patch
-
 // Reconcile creates a new SPIFFE ID when pods are created
 func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	var pod corev1.Pod
@@ -143,8 +141,6 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			},
 		},
 	}
-	spiffeId.ObjectMeta.Name = pod.ObjectMeta.Name + "-" + computeHash(&spiffeId.Spec, nil)
-	spiffeId.Spec.DnsNames = append(spiffeId.Spec.DnsNames, pod.Name)
 
 	// Set pod as owner of new SPIFFE ID
 	err := controllerutil.SetControllerReference(&pod, spiffeId, r.ctlr.Scheme)
@@ -153,13 +149,12 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	// Create SPIFFE ID
-	err = r.ctlr.Create(ctx, spiffeId)
+	// Set pod name as first DNS name
+	spiffeId.Spec.DnsNames = append(spiffeId.Spec.DnsNames, pod.Name)
+
+	err = r.createSpiffeId(ctx, pod.ObjectMeta.Name, spiffeId)
 	if err != nil {
-		if !errors.IsAlreadyExists(err) {
-			log.Error(err, "Failed to create new SpiffeID", "SpiffeID.Name", spiffeId.Name)
-			return ctrl.Result{}, err
-		}
+		return ctrl.Result{}, err
 	}
 
 	// Add label to pod with name of SPIFFE ID
@@ -185,6 +180,24 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *PodReconciler) createSpiffeId(ctx context.Context, podName string, spiffeId *spiffeidv1beta1.SpiffeID) error {
+	var collisionCount int32
+	var existing spiffeidv1beta1.SpiffeID
+	for {
+		spiffeId.ObjectMeta.Name = podName + "-" + computeHash(&spiffeId.Spec, nil)
+		err := r.ctlr.Create(ctx, spiffeId)
+		if errors.IsAlreadyExists(err) {
+			r.ctlr.Get(ctx, types.NamespacedName{Name: spiffeId.ObjectMeta.Name, Namespace: spiffeId.ObjectMeta.Namespace}, &existing)
+			if reflect.DeepEqual(spiffeId.Spec, existing.Spec) {
+				collisionCount++
+				continue
+			}
+		}
+		return nil
+	}
+
 }
 
 func (r *PodReconciler) makeID(pathFmt string, pathArgs ...interface{}) string {
