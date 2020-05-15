@@ -13,6 +13,13 @@ const (
 	defaultCertPath   = "cert.pem"
 	defaultKeyPath    = "key.pem"
 	defaultCaCertPath = "cacert.pem"
+	defaultPodController = true
+	defaultAddSvcDNSName = true
+
+
+	modeCRD           = "crd"
+	modeWebhook       = "webhook"
+	defaultMode       = modeWebhook
 )
 
 type Config struct {
@@ -29,6 +36,12 @@ type Config struct {
 	Cluster                        string `hcl:"cluster"`
 	PodLabel                       string `hcl:"pod_label"`
 	PodAnnotation                  string `hcl:"pod_annotation"`
+	DisabledNamespaces             []string `hcl:"disabled_namespaces"`
+	Mode                           string `hcl:"mode"`
+
+	PodController                  bool   `hcl:"pod_controller"`
+	AddSvcDNSName                  bool   `hcl:"add_svc_dns_name"`
+
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -41,6 +54,10 @@ func LoadConfig(path string) (*Config, error) {
 
 func ParseConfig(hclConfig string) (*Config, error) {
 	c := new(Config)
+	c.Mode = defaultMode
+	c.PodController = defaultPodController
+	c.AddSvcDNSName = defaultAddSvcDNSName
+
 	if err := hcl.Decode(c, hclConfig); err != nil {
 		return nil, errs.New("unable to decode configuration: %v", err)
 	}
@@ -72,6 +89,18 @@ func ParseConfig(hclConfig string) (*Config, error) {
 	if c.PodLabel != "" && c.PodAnnotation != "" {
 		return nil, errs.New("workload registration mode specification is incorrect, can't specify both pod_label and pod_annotation")
 	}
+	if c.DisabledNamespaces == nil {
+		c.DisabledNamespaces = defaultDisabledNamespaces()
+	}
+
+	if c.Mode != modeCRD && c.Mode != modeWebhook {
+		return nil, errs.New("invalid mode \"%s\", valid values are %s and %s", c.Mode, modeCRD, modeWebhook)
+	}
 
 	return c, nil
+}
+
+func defaultDisabledNamespaces() []string {
+	return []string{"kube-system"}
+
 }

@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -58,7 +59,7 @@ func (c *client) GetPod(namespace, podName string) (*v1.Pod, error) {
 	}
 
 	// Get pod
-	pod, err := clientset.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
+	pod, err := clientset.CoreV1().Pods(namespace).Get(context.TODO(), podName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("unable to query pods API: %v", err)
 	}
@@ -83,7 +84,7 @@ func (c *client) GetNode(nodeName string) (*v1.Node, error) {
 	}
 
 	// Get node
-	node, err := clientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+	node, err := clientset.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("unable to query nodes API: %v", err)
 	}
@@ -111,7 +112,7 @@ func (c *client) ValidateToken(token string, audiences []string) (*authv1.TokenR
 	}
 
 	// Do request
-	resp, err := clientset.AuthenticationV1().TokenReviews().Create(req)
+	resp, err := clientset.AuthenticationV1().TokenReviews().Create(context.TODO(), req, metav1.CreateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("unable to query token review API: %v", err)
 	}
