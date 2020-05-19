@@ -22,7 +22,7 @@ import (
 	"path"
 	"reflect"
 
-	"github.com/go-logr/logr"
+	"github.com/sirupsen/logrus"
 	spiffeidv1beta1 "github.com/spiffe/spire/api/spiffecrd/v1beta1"
 
 	corev1 "k8s.io/api/core/v1"
@@ -44,39 +44,64 @@ const (
 	PodReconcilerModeAnnotation
 )
 
+type PodControllerConfig struct {
+	Log           logrus.FieldLogger
+	Mgr           ctrl.Manager
+	TrustDomain   string
+	PodLabel      string
+	PodAnnotation string
+	AddSvcDNSName bool
+	DisabledNamespaces []string
+}
+
 type PodController struct {
 	client.Client
-	Mgr                ctrl.Manager
-	Log                logr.Logger
+	c                  PodControllerConfig
 	Scheme             *runtime.Scheme
-	TrustDomain        string
 	Mode               PodReconcilerMode
 	Value              string
-	DisabledNamespaces []string
 	AddSvcDNSName      bool
 	svcNametoSpiffeID  map[string][]string
 }
 
-func BuildPodControllers(pc *PodController) error {
-
-	err := ctrl.NewControllerManagedBy(pc.Mgr).
-		For(&corev1.Pod{}).
-		Complete(&PodReconciler{ctlr: pc})
-	if err != nil {
-		return err
+func NewPodController(config PodControllerConfig) (*PodController, error) {
+	mode := PodReconcilerModeServiceAccount
+	value := ""
+	if len(config.PodLabel) > 0 {
+		mode = PodReconcilerModeLabel
+		value = config.PodLabel
+	}
+	if len(config.PodAnnotation) > 0 {
+		mode = PodReconcilerModeAnnotation
+		value = config.PodAnnotation
 	}
 
-	if pc.AddSvcDNSName {
-		pc.svcNametoSpiffeID = make(map[string][]string)
-		err = ctrl.NewControllerManagedBy(pc.Mgr).
+	r := &PodController {
+		Client: config.Mgr.GetClient(),
+		c:      config,
+		Mode:   mode,
+		Value:  value,
+		Scheme: config.Mgr.GetScheme(),
+	}
+
+	err := ctrl.NewControllerManagedBy(config.Mgr).
+		For(&corev1.Pod{}).
+		Complete(&PodReconciler{ctlr: r})
+	if err != nil {
+		return nil, err
+	}
+
+	if config.AddSvcDNSName {
+		r.svcNametoSpiffeID = make(map[string][]string)
+		err = ctrl.NewControllerManagedBy(config.Mgr).
 			For(&corev1.Endpoints{}).
-			Complete(&EndpointReconciler{ctlr: pc})
+			Complete(&EndpointReconciler{ctlr: r})
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	return r, nil
 }
 
 // PodReconciler reconciles a Pod object
@@ -87,17 +112,20 @@ type PodReconciler struct {
 // Reconcile creates a new SPIFFE ID when pods are created
 func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	var pod corev1.Pod
-
 	ctx := context.Background()
-	log := r.ctlr.Log.WithValues("pod", req.NamespacedName)
 
-	if containsString(r.ctlr.DisabledNamespaces, req.NamespacedName.Namespace) {
+	r.ctlr.c.Log.WithFields(logrus.Fields{
+		"namespace": req.NamespacedName.Namespace,
+		"name":      req.NamespacedName.Name,
+	}).Debug("Pod Reconcile called")
+
+	if containsString(r.ctlr.c.DisabledNamespaces, req.NamespacedName.Namespace) {
 		return ctrl.Result{}, nil
 	}
 
 	if err := r.ctlr.Get(ctx, req.NamespacedName, &pod); err != nil {
 		if !errors.IsNotFound(err) {
-			log.Error(err, "unable to fetch Pod")
+			r.ctlr.c.Log.WithError(err).Error("unable to fetch Pod")
 			return ctrl.Result{}, err
 		}
 
@@ -145,7 +173,9 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// Set pod as owner of new SPIFFE ID
 	err := controllerutil.SetControllerReference(&pod, spiffeId, r.ctlr.Scheme)
 	if err != nil {
-		log.Error(err, "Failed to set pod as owner of new SpiffeID", "SpiffeID.Name", spiffeId.Name)
+		r.ctlr.c.Log.WithFields(logrus.Fields{
+			"SpiffeID.Name": spiffeId.Name,
+		}).WithError(err).Error("Failed to set pod as owner of new SpiffeID")
 		return ctrl.Result{}, err
 	}
 
@@ -163,7 +193,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			// Retrieve the latest version of Pod before attempting update
 			// RetryOnConflict uses exponential backoff to avoid exhausting the apiserver
 			if err := r.ctlr.Get(ctx, req.NamespacedName, &pod); err != nil {
-				log.Error(err, "Failed to get latest version of Pod")
+				r.ctlr.c.Log.WithError(err).Error("Failed to get latest version of Pod")
 				return err
 			}
 			pod.ObjectMeta.Labels["spiffe.io/spiffeid"] = spiffeId.ObjectMeta.Name
@@ -173,10 +203,10 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			return err
 		})
 		if retryErr != nil {
-			log.Error(retryErr, "Update failed")
+			r.ctlr.c.Log.WithError(retryErr).Error("Update failed")
 			return ctrl.Result{}, retryErr
 		}
-		log.Info("Added label to pod")
+		r.ctlr.c.Log.Info("Added label to pod")
 	}
 
 	return ctrl.Result{}, nil
@@ -187,10 +217,11 @@ func (r *PodReconciler) createSpiffeId(ctx context.Context, podName string, spif
 	var existing spiffeidv1beta1.SpiffeID
 	for {
 		spiffeId.ObjectMeta.Name = podName + "-" + computeHash(&spiffeId.Spec, nil)
+		r.ctlr.c.Log.Infof("in for loop: %v", spiffeId.ObjectMeta.Name)
 		err := r.ctlr.Create(ctx, spiffeId)
 		if errors.IsAlreadyExists(err) {
 			r.ctlr.Get(ctx, types.NamespacedName{Name: spiffeId.ObjectMeta.Name, Namespace: spiffeId.ObjectMeta.Namespace}, &existing)
-			if reflect.DeepEqual(spiffeId.Spec, existing.Spec) {
+			if !reflect.DeepEqual(spiffeId.Spec, existing.Spec) {
 				collisionCount++
 				continue
 			}
@@ -203,7 +234,7 @@ func (r *PodReconciler) createSpiffeId(ctx context.Context, podName string, spif
 func (r *PodReconciler) makeID(pathFmt string, pathArgs ...interface{}) string {
 	id := url.URL{
 		Scheme: "spiffe",
-		Host:   r.ctlr.TrustDomain,
+		Host:   r.ctlr.c.TrustDomain,
 		Path:   path.Clean(fmt.Sprintf(pathFmt, pathArgs...)),
 	}
 	return id.String()
@@ -221,23 +252,26 @@ func (e *EndpointReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	var endpoints corev1.Endpoints
 
 	ctx := context.Background()
-	log := e.ctlr.Log.WithValues("endpoint", req.NamespacedName)
+	e.ctlr.c.Log.WithFields(logrus.Fields{
+		"namespace": req.NamespacedName.Namespace,
+		"name":      req.NamespacedName.Name,
+	}).Debug("Endpoint Reconcile called")
 
-	if containsString(e.ctlr.DisabledNamespaces, req.NamespacedName.Namespace) {
+	if containsString(e.ctlr.c.DisabledNamespaces, req.NamespacedName.Namespace) {
 		return ctrl.Result{}, nil
 	}
 
 	if err := e.ctlr.Get(ctx, req.NamespacedName, &endpoints); err != nil {
 		if errors.IsNotFound(err) {
 			// Delete event
-			if err := e.deleteExternalResources(ctx, log, req.NamespacedName); err != nil {
+			if err := e.deleteExternalResources(ctx, req.NamespacedName); err != nil {
 				return ctrl.Result{}, err
 			}
 
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
 
-		log.Error(err, "unable to fetch Endpoints")
+		e.ctlr.c.Log.WithError(err).Error("unable to fetch Endpoints")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -247,36 +281,44 @@ func (e *EndpointReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			if address.TargetRef != nil {
 				pod := corev1.Pod{}
 				if err := e.ctlr.Get(ctx, types.NamespacedName{Name: address.TargetRef.Name, Namespace: address.TargetRef.Namespace}, &pod); err != nil {
-					log.Error(err, "Error retreiving pod")
+					e.ctlr.c.Log.WithError(err).Error("Error retreiving pod")
 					return ctrl.Result{}, err
 				}
 				spiffeidname := pod.ObjectMeta.Labels["spiffe.io/spiffeid"]
 				existing := &spiffeidv1beta1.SpiffeID{}
 				if err := e.ctlr.Get(ctx, types.NamespacedName{Name: spiffeidname, Namespace: address.TargetRef.Namespace}, existing); err != nil {
 					if !errors.IsNotFound(err) {
-						log.Error(err, "failed to get SpiffeID", "name", spiffeidname)
+						e.ctlr.c.Log.WithFields(logrus.Fields{
+							"name": spiffeidname,
+						}).WithError(err).Error("failed to get SpiffeID")
 						return ctrl.Result{}, err
 					}
 					continue
 				}
 				if existing != nil {
-					log.Info("adding DNS names for", "service", svcName)
+					e.ctlr.c.Log.WithFields(logrus.Fields{
+						"service": svcName,
+					}).Info("adding DNS names for")
 					if !containsString(existing.Spec.DnsNames[1:], svcName) {
 						retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 							if err := e.ctlr.Get(ctx, types.NamespacedName{Name: spiffeidname, Namespace: address.TargetRef.Namespace}, existing); err != nil {
-								log.Error(err, "Failed to get latest version of SPIFFE ID")
+								e.ctlr.c.Log.WithError(err).Error("Failed to get latest version of SPIFFE ID")
 								return err
 							}
 
 							existing.Spec.DnsNames = append(existing.Spec.DnsNames, svcName)
 							err := e.ctlr.Update(ctx, existing)
 							if err != nil {
-								log.Error(err, "unable to add DNS names in SPIFFE ID CRD", "name", spiffeidname)
+								e.ctlr.c.Log.WithFields(logrus.Fields{
+									"name": spiffeidname,
+								}).WithError(err).Error("unable to add DNS names in SPIFFE ID CRD")
 							}
 							return err
 						})
 						if retryErr != nil {
-							log.Error(retryErr, "unable to add DNS names in SPIFFE ID CRD", "name", spiffeidname)
+							e.ctlr.c.Log.WithFields(logrus.Fields{
+								"name": spiffeidname,
+							}).Error(retryErr, "unable to add DNS names in SPIFFE ID CRD")
 							return ctrl.Result{}, retryErr
 						}
 
@@ -292,21 +334,25 @@ func (e *EndpointReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	return ctrl.Result{}, nil
 }
-func (e *EndpointReconciler) deleteExternalResources(ctx context.Context, log logr.Logger, namespacedName types.NamespacedName) error {
+func (e *EndpointReconciler) deleteExternalResources(ctx context.Context, namespacedName types.NamespacedName) error {
 	svcName := namespacedName.Name + "." + namespacedName.Namespace
 	for _, spiffeidname := range e.ctlr.svcNametoSpiffeID[svcName] {
 
 		existing := &spiffeidv1beta1.SpiffeID{}
 		if err := e.ctlr.Get(ctx, types.NamespacedName{Name: spiffeidname, Namespace: namespacedName.Namespace}, existing); err != nil {
 			if !errors.IsNotFound(err) {
-				log.Error(err, "failed to get SpiffeID", "name", spiffeidname)
+				e.ctlr.c.Log.WithFields(logrus.Fields{
+					"name": spiffeidname,
+				}).WithError(err).Error("failed to get SpiffeID")
 				return err
 			}
 
 			return nil
 		}
 		if existing != nil {
-			log.Info("deleting DNS names for", "service", svcName)
+			e.ctlr.c.Log.WithFields(logrus.Fields{
+				"service": svcName,
+			}).Info("deleting DNS names for")
 			i := 0 // output index
 			for _, dnsName := range existing.Spec.DnsNames {
 				if dnsName != svcName {
@@ -318,7 +364,9 @@ func (e *EndpointReconciler) deleteExternalResources(ctx context.Context, log lo
 
 			existing.Spec.DnsNames = existing.Spec.DnsNames[:i]
 			if err := e.ctlr.Update(ctx, existing); err != nil {
-				log.Error(err, "unable to delete DNS names in SPIFFE ID CRD", "name", spiffeidname)
+				e.ctlr.c.Log.WithFields(logrus.Fields{
+					"name": spiffeidname,
+				}).WithError(err).Error("unable to delete DNS names in SPIFFE ID CRD")
 				return err
 			}
 

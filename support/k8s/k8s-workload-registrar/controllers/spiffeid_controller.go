@@ -22,66 +22,101 @@ import (
 	"net/url"
 	"path"
 
-	"github.com/go-logr/logr"
+	"github.com/sirupsen/logrus"
+	"github.com/spiffe/spire/pkg/common/idutil"
 	"github.com/spiffe/spire/proto/spire/api/registration"
 	"github.com/spiffe/spire/proto/spire/common"
+	"github.com/zeebo/errs"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	spiffeidv1beta1 "github.com/spiffe/spire/api/spiffecrd/v1beta1"
 )
 
+type SpiffeIDReconcilerConfig struct {
+	Log          logrus.FieldLogger
+	R            registration.RegistrationClient
+	TrustDomain  string
+	Cluster      string
+	Mgr          ctrl.Manager
+}
+
 // SpiffeIDReconciler reconciles a SpiffeID object
 type SpiffeIDReconciler struct {
 	client.Client
-	Log                logr.Logger
-	Scheme             *runtime.Scheme
+	c                  SpiffeIDReconcilerConfig
 	myId               *string
-	SpireClient        registration.RegistrationClient
-	TrustDomain        string
-	Cluster            string
 	spiffeIDCollection map[string]string
 }
 
-// +kubebuilder:rbac:groups=spiffeid.spiffe.io,resources=spiffeids,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=spiffeid.spiffe.io,resources=spiffeids/status,verbs=get;update;patch
+// NewSpiffeIDReconciler create a new SpiffeIDReconciler object
+func NewSpiffeIDReconciler(config SpiffeIDReconcilerConfig) (*SpiffeIDReconciler, error) {
+	r := &SpiffeIDReconciler {
+		Client: config.Mgr.GetClient(),
+		c: config,
+		spiffeIDCollection:  make(map[string]string),
+	}
 
+	err := ctrl.NewControllerManagedBy(r.c.Mgr).
+		For(&spiffeidv1beta1.SpiffeID{}).
+		Complete(r)
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+func (r *SpiffeIDReconciler) Initialize(ctx context.Context) error {
+	// ensure there is a node registration entry for PSAT nodes in the cluster.
+	nodeID := r.nodeID()
+	r.myId = &nodeID
+	return r.createEntry(ctx, &common.RegistrationEntry{
+		ParentId: idutil.ServerID(r.c.TrustDomain),
+		SpiffeId: nodeID,
+		Selectors: []*common.Selector{
+			{Type: "k8s_psat", Value: fmt.Sprintf("cluster:%s", r.c.Cluster)},
+		},
+	})
+}
+
+// Reconcile ensures the SPIRE Server entry matches the corresponding CRD
 func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	log := r.Log.WithValues("spireentry", req.NamespacedName)
-
-	if r.myId == nil {
-		if err := r.makeMyId(ctx, log); err != nil {
-			log.Error(err, "unable to create parent ID")
-			return ctrl.Result{}, err
-		}
-	}
+	r.c.Log.WithFields(logrus.Fields{
+		"namespace": req.NamespacedName.Namespace,
+		"name":      req.NamespacedName.Name,
+	}).Debug("Spiffe ID Reconcile called")
 
 	var spiffeID spiffeidv1beta1.SpiffeID
 	if err := r.Get(ctx, req.NamespacedName, &spiffeID); err != nil {
 		if !k8serrors.IsNotFound(err) {
-			log.Error(err, "unable to fetch SpiffeID")
+			r.c.Log.WithError(err).Error("unable to fetch SpiffeID")
 			return ctrl.Result{}, err
 		}
 
 		// Delete event
-		if err := r.ensureDeleted(ctx, log, r.spiffeIDCollection[req.NamespacedName.String()]); err != nil {
-			log.Error(err, "unable to delete spire entry", "entryid", r.spiffeIDCollection[req.NamespacedName.String()])
+		if err := r.ensureDeleted(ctx, r.spiffeIDCollection[req.NamespacedName.String()]); err != nil {
+			r.c.Log.WithFields(logrus.Fields{
+				"entryid": r.spiffeIDCollection[req.NamespacedName.String()],
+			}).WithError(err).Error("unable to delete spire entry", )
 			return ctrl.Result{}, err
 		}
 		delete(r.spiffeIDCollection, req.NamespacedName.String())
-		log.Info("Finalized entry", "entry", req.NamespacedName.String())
+		r.c.Log.WithFields(logrus.Fields{
+			"entry": req.NamespacedName.String(),
+		}).Info("Finalized entry")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	entryId, err := r.getOrCreateSpiffeID(ctx, log, &spiffeID)
+	entryId, err := r.getOrCreateSpiffeID(ctx, &spiffeID)
 	if err != nil {
-		log.Error(err, "unable to get or create spire entry", "request", req)
+		r.c.Log.WithFields(logrus.Fields{
+			"request": req,
+		}).WithError(err).Error(err, "unable to get or create spire entry")
 		return ctrl.Result{}, err
 	}
 
@@ -90,32 +125,34 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		// We need to update the Status field
 		if oldEntryId != nil {
 			// entry resource must have been modified, delete the hanging one
-			if err := r.ensureDeleted(ctx, log, *spiffeID.Status.EntryId); err != nil {
-				log.Error(err, "unable to delete old spire entry", "entryid", *spiffeID.Status.EntryId)
+			if err := r.ensureDeleted(ctx, *spiffeID.Status.EntryId); err != nil {
+				r.c.Log.WithFields(logrus.Fields{
+					"entryid": *spiffeID.Status.EntryId,
+				}).WithError(err).Error("unable to delete old spire entry")
 				return ctrl.Result{}, err
 			}
 		}
 		spiffeID.Status.EntryId = &entryId
 		if err := r.Status().Update(ctx, &spiffeID); err != nil {
-			log.Error(err, "unable to update SpiffeID status")
+			r.c.Log.WithError(err).Error("unable to update SpiffeID status")
 			return ctrl.Result{}, err
 		}
 	}
 
-	currentEntry, err := r.SpireClient.FetchEntry(ctx, &registration.RegistrationEntryID{Id: entryId})
+	currentEntry, err := r.c.R.FetchEntry(ctx, &registration.RegistrationEntryID{Id: entryId})
 	if err != nil {
-		log.Error(err, "unable to fetch current SpiffeID entry")
+		r.c.Log.WithError(err).Error("unable to fetch current SpiffeID entry")
 		return ctrl.Result{}, err
 	}
 
 	if !equalStringSlice(currentEntry.DnsNames, spiffeID.Spec.DnsNames) {
-		log.Info("Updating Spire Entry")
+		r.c.Log.Info("Updating Spire Entry")
 
-		_, err := r.SpireClient.UpdateEntry(ctx, &registration.UpdateEntryRequest{
+		_, err := r.c.R.UpdateEntry(ctx, &registration.UpdateEntryRequest{
 			Entry: r.createCommonRegistrationEntry(spiffeID),
 		})
 		if err != nil {
-			log.Error(err, "unable to update SpiffeID with new DNS names")
+			r.c.Log.WithError(err).Error("unable to update SpiffeID with new DNS names")
 			return ctrl.Result{}, err
 		}
 	}
@@ -123,22 +160,18 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
-func (r *SpiffeIDReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	r.spiffeIDCollection = make(map[string]string)
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&spiffeidv1beta1.SpiffeID{}).
-		Complete(r)
-}
 
-func (r *SpiffeIDReconciler) ensureDeleted(ctx context.Context, reqLogger logr.Logger, entryId string) error {
-	if _, err := r.SpireClient.DeleteEntry(ctx, &registration.RegistrationEntryID{Id: entryId}); err != nil {
+func (r *SpiffeIDReconciler) ensureDeleted(ctx context.Context, entryId string) error {
+	if _, err := r.c.R.DeleteEntry(ctx, &registration.RegistrationEntryID{Id: entryId}); err != nil {
 		if status.Code(err) != codes.NotFound {
 			if status.Code(err) == codes.Internal {
 				// Spire server currently returns a 500 if delete fails due to the entry not existing. This is probably a bug.
 				// We work around it by attempting to fetch the entry, and if it's not found then all is good.
-				if _, err := r.SpireClient.FetchEntry(ctx, &registration.RegistrationEntryID{Id: entryId}); err != nil {
+				if _, err := r.c.R.FetchEntry(ctx, &registration.RegistrationEntryID{Id: entryId}); err != nil {
 					if status.Code(err) == codes.NotFound {
-						reqLogger.Info("Entry already deleted", "entry", entryId)
+						r.c.Log.WithFields(logrus.Fields{
+							"entry": entryId,
+						}).Info("Entry already deleted")
 						return nil
 					}
 				}
@@ -146,7 +179,9 @@ func (r *SpiffeIDReconciler) ensureDeleted(ctx context.Context, reqLogger logr.L
 			return err
 		}
 	}
-	reqLogger.Info("Deleted entry", "entry", entryId)
+	r.c.Log.WithFields(logrus.Fields{
+		"entry": entryId,
+	}).Info("Deleted entry")
 	return nil
 }
 
@@ -167,45 +202,22 @@ func ServerID(trustDomain string) string {
 func (r *SpiffeIDReconciler) makeID(pathFmt string, pathArgs ...interface{}) string {
 	id := url.URL{
 		Scheme: "spiffe",
-		Host:   r.TrustDomain,
+		Host:   r.c.TrustDomain,
 		Path:   path.Clean(fmt.Sprintf(pathFmt, pathArgs...)),
 	}
 	return id.String()
 }
 
 func (r *SpiffeIDReconciler) nodeID() string {
-	return r.makeID("k8s-workload-registrar/%s/node", r.Cluster)
+	return r.makeID("k8s-workload-registrar/%s/node", r.c.Cluster)
 }
 
-func (r *SpiffeIDReconciler) makeMyId(ctx context.Context, reqLogger logr.Logger) error {
-	myId := r.nodeID()
-	reqLogger.Info("Initializing registrar parent ID.")
-	_, err := r.SpireClient.CreateEntry(ctx, &common.RegistrationEntry{
-		Selectors: []*common.Selector{
-			{Type: "k8s_psat", Value: fmt.Sprintf("cluster:%s", r.Cluster)},
-		},
-		ParentId: ServerID(r.TrustDomain),
-		SpiffeId: myId,
-	})
-	if err != nil {
-		if status.Code(err) != codes.AlreadyExists {
-			reqLogger.Info("Failed to create registrar parent ID", "spiffeID", myId)
-			return err
-		}
-	}
-	reqLogger.Info("Initialized registrar parent ID", "spiffeID", myId)
-	r.myId = &myId
-	return nil
-}
-
-var ExistingEntryNotFoundError = errors.New("no existing matching entry found")
-
-func (r *SpiffeIDReconciler) getExistingEntry(ctx context.Context, reqLogger logr.Logger, id string, selectors []*common.Selector) (string, error) {
-	entries, err := r.SpireClient.ListByParentID(ctx, &registration.ParentID{
+func (r *SpiffeIDReconciler) getExistingEntry(ctx context.Context, id string, selectors []*common.Selector) (string, error) {
+	entries, err := r.c.R.ListByParentID(ctx, &registration.ParentID{
 		Id: *r.myId,
 	})
 	if err != nil {
-		reqLogger.Error(err, "Failed to retrieve existing spire entry")
+		r.c.Log.WithError(err).Error("Failed to retrieve existing spire entry")
 		return "", err
 	}
 
@@ -232,7 +244,7 @@ func (r *SpiffeIDReconciler) getExistingEntry(ctx context.Context, reqLogger log
 			}
 		}
 	}
-	return "", ExistingEntryNotFoundError
+	return "", errors.New("no existing matching entry found")
 }
 
 func (r *SpiffeIDReconciler) createCommonRegistrationEntry(instance spiffeidv1beta1.SpiffeID) *common.RegistrationEntry {
@@ -280,7 +292,26 @@ func (r *SpiffeIDReconciler) createCommonRegistrationEntry(instance spiffeidv1be
 	}
 }
 
-func (r *SpiffeIDReconciler) getOrCreateSpiffeID(ctx context.Context, reqLogger logr.Logger, instance *spiffeidv1beta1.SpiffeID) (string, error) {
+func (r *SpiffeIDReconciler) createEntry(ctx context.Context, entry *common.RegistrationEntry) error {
+	// ensure there is a node registration entry for PSAT nodes in the cluster.
+	log := r.c.Log.WithFields(logrus.Fields{
+		"parent_id": entry.ParentId,
+		"spiffe_id": entry.SpiffeId,
+		"selectors": selectorsField(entry.Selectors),
+	})
+	_, err := r.c.R.CreateEntry(ctx, entry)
+	switch status.Code(err) {
+	case codes.OK, codes.AlreadyExists:
+		log.Info("Created pod entry")
+		return nil
+	default:
+		log.WithError(err).Error("Failed to create pod entry")
+		return errs.Wrap(err)
+	}
+}
+
+
+func (r *SpiffeIDReconciler) getOrCreateSpiffeID(ctx context.Context, instance *spiffeidv1beta1.SpiffeID) (string, error) {
 
 	// TODO: sanitize!
 	selectors := make([]*common.Selector, 0, len(instance.Spec.Selector.PodLabel))
@@ -320,7 +351,7 @@ func (r *SpiffeIDReconciler) getOrCreateSpiffeID(ctx context.Context, reqLogger 
 
 	spiffeId := instance.Spec.SpiffeId
 
-	regEntryId, err := r.SpireClient.CreateEntry(ctx, &common.RegistrationEntry{
+	regEntryId, err := r.c.R.CreateEntry(ctx, &common.RegistrationEntry{
 		Selectors: selectors,
 		ParentId:  *r.myId,
 		SpiffeId:  spiffeId,
@@ -328,19 +359,25 @@ func (r *SpiffeIDReconciler) getOrCreateSpiffeID(ctx context.Context, reqLogger 
 	})
 	if err != nil {
 		if status.Code(err) == codes.AlreadyExists {
-			entryId, err := r.getExistingEntry(ctx, reqLogger, spiffeId, selectors)
+			entryId, err := r.getExistingEntry(ctx, spiffeId, selectors)
 			if err != nil {
-				reqLogger.Error(err, "Failed to reuse existing spire entry")
+				r.c.Log.WithError(err).Error("Failed to reuse existing spire entry")
 				return "", err
 			}
-			reqLogger.Info("Found existing entry", "entryID", entryId, "spiffeID", spiffeId)
+			r.c.Log.WithFields(logrus.Fields{
+				"entryID": entryId,
+				"spiffeID": spiffeId,
+			}).Info("Found existing entry")
 			return entryId, err
 		}
-		reqLogger.Error(err, "Failed to create spire entry")
+		r.c.Log.WithError(err).Error("Failed to create spire entry")
 		return "", err
 	}
 	r.spiffeIDCollection[instance.ObjectMeta.Namespace+"/"+instance.ObjectMeta.Name] = regEntryId.Id
-	reqLogger.Info("Created entry", "entryID", regEntryId.Id, "spiffeID", spiffeId)
+	r.c.Log.WithFields(logrus.Fields{
+		"entryID": regEntryId.Id,
+		"spiffeID": spiffeId,
+	}).Info("Created entry")
 
 	return regEntryId.Id, nil
 

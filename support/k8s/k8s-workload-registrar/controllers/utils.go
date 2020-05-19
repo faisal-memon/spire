@@ -16,6 +16,7 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"hash"
@@ -23,8 +24,31 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	spiffeidv1beta1 "github.com/spiffe/spire/api/spiffecrd/v1beta1"
+	"github.com/spiffe/spire/proto/spire/common"
 	"k8s.io/apimachinery/pkg/util/rand"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	corev1 "k8s.io/api/core/v1"
 )
+
+func NewManager() (ctrl.Manager, error) {
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = spiffeidv1beta1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		MetricsBindAddress: "0",
+		Scheme:             scheme,
+		Port:               9443,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return mgr, nil
+}
 
 func deepHashObject(hasher hash.Hash, objectToWrite interface{}) {
 	hasher.Reset()
@@ -52,6 +76,19 @@ func computeHash(template *spiffeidv1beta1.SpiffeIDSpec, collisionCount *int32) 
 	}
 
 	return rand.SafeEncodeString(fmt.Sprint(podTemplateSpecHasher.Sum32()))
+}
+
+func selectorsField(selectors []*common.Selector) string {
+	var buf bytes.Buffer
+	for i, selector := range selectors {
+		if i > 0 {
+			buf.WriteString(",")
+		}
+		buf.WriteString(selector.Type)
+		buf.WriteString(":")
+		buf.WriteString(selector.Value)
+	}
+	return buf.String()
 }
 
 func equalStringSlice(x, y []string) bool {

@@ -28,12 +28,15 @@ The configuration file is a **required** by the registrar. It contains
 | `cert_path`                | string  | required | Path on disk to the PEM-encoded server TLS certificate | `"cert.pem"` |
 | `key_path`                 | string  | required | Path on disk to the PEM-encoded server TLS key |  `"key.pem"` |
 | `cacert_path`              | string  | required | Path on disk to the CA certificate used to verify the client (i.e. API server) | `"cacert.pem"` |
-| `insecure_skip_client_verification` | boolean | required | If true, skips client certificate verification (in which case `cacert_path` is ignored). See [Security Considerations](#security-considerations) for more details. | `false` |
+| `insecure_skip_client_verification`  | boolean | required | If true, skips client certificate verification (in which case `cacert_path` is ignored). See [Security Considerations](#security-considerations) for more details. | `false` |
 | `trust_domain`             | string  | required | Trust domain of the SPIRE server | |
 | `server_socket_path`       | string  | required | Path to the Unix domain socket of the SPIRE server | |
 | `cluster`                  | string  | required | Logical cluster to register nodes/workloads under. Must match the SPIRE SERVER PSAT node attestor configuration. | |
 | `pod_label`                | string  | optional | The pod label used for [Label Based Workload Registration](#label-based-workload-registration) | |
 | `pod_annotation`           | string  | optional | The pod annotation used for [Annotation Based Workload Registration](#annotation-based-workload-registration) | |
+| `add_svc_dns_name`         | bool    | optional | Enable adding service names as SAN DNS names to endpoint pods | `true` |
+| `disabled_namespaces`      | []string| optional | Comma seperated list of namespaces to disable auto SVID generation for | `"kube-system"` |
+
 
 ### Example
 

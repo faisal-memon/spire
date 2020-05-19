@@ -13,10 +13,6 @@ import (
 	"google.golang.org/grpc"
 
 	ctrl "sigs.k8s.io/controller-runtime"
-	"k8s.io/apimachinery/pkg/runtime"
-	spiffeidv1beta1 "github.com/spiffe/spire/api/spiffecrd/v1beta1"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	corev1 "k8s.io/api/core/v1"
 )
 
 var (
@@ -81,54 +77,39 @@ func run(ctx context.Context, configPath string) error {
 		return server.Run(ctx)
 	case modeCRD:
 		// Setup all Controllers
-		scheme := runtime.NewScheme()
-		_ = clientgoscheme.AddToScheme(scheme)
-		_ = spiffeidv1beta1.AddToScheme(scheme)
-		_ = corev1.AddToScheme(scheme)
 
-		mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-			Scheme:             scheme,
-			// MetricsBindAddress: config.MetricsAddr,
-			//LeaderElection:     config.LeaderElection,
-			//Port:               9443,
+		mgr, err := controllers.NewManager()
+		if err != nil {
+			return err
+		}
+
+		spiffeIDReconciler, err := controllers.NewSpiffeIDReconciler(controllers.SpiffeIDReconcilerConfig{
+			Log:         log,
+			Mgr:         mgr,
+			R:           registration.NewRegistrationClient(serverConn),
+			Cluster:     config.Cluster,
+			TrustDomain: config.TrustDomain,
 		})
 		if err != nil {
 			return err
 		}
 
-		if err = (&controllers.SpiffeIDReconciler{
-			Client:      mgr.GetClient(),
-			Log:         ctrl.Log.WithName("controllers").WithName("SpiffeID"),
-			Scheme:      mgr.GetScheme(),
-			SpireClient: registration.NewRegistrationClient(serverConn),
-			Cluster:     config.Cluster,
-			TrustDomain: config.TrustDomain,
-		}).SetupWithManager(mgr); err != nil {
+		log.Info("Initializing SPIFFE ID Reconciler")
+		if err := spiffeIDReconciler.Initialize(ctx); err != nil {
 			return err
 		}
+
 		if config.PodController {
-			mode := controllers.PodReconcilerModeServiceAccount
-			value := ""
-			if len(config.PodLabel) > 0 {
-				mode = controllers.PodReconcilerModeLabel
-				value = config.PodLabel
-			}
-			if len(config.PodAnnotation) > 0 {
-				mode = controllers.PodReconcilerModeAnnotation
-				value = config.PodAnnotation
-			}
-			ctlr := &controllers.PodController{
-				Client:             mgr.GetClient(),
+			_, err := controllers.NewPodController(controllers.PodControllerConfig{
+				Log:                log,
 				Mgr:                mgr,
-				Log:                ctrl.Log.WithName("controllers"),
-				Scheme:             mgr.GetScheme(),
 				TrustDomain:        config.TrustDomain,
-				Mode:               mode,
-				Value:              value,
+				PodLabel:           config.PodLabel,
+				PodAnnotation:      config.PodAnnotation,
 				DisabledNamespaces: config.DisabledNamespaces,
 				AddSvcDNSName:      config.AddSvcDNSName,
-			}
-			if err := controllers.BuildPodControllers(ctlr); err != nil {
+			})
+			if err != nil {
 				return err
 			}
 		}
