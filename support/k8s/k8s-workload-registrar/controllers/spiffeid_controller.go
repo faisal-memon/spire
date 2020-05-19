@@ -185,20 +185,6 @@ func (r *SpiffeIDReconciler) ensureDeleted(ctx context.Context, entryId string) 
 	return nil
 }
 
-// ServerURI creates a server SPIFFE URI given a trustDomain.
-func ServerURI(trustDomain string) *url.URL {
-	return &url.URL{
-		Scheme: "spiffe",
-		Host:   trustDomain,
-		Path:   path.Join("spire", "server"),
-	}
-}
-
-// ServerID creates a server SPIFFE ID string given a trustDomain.
-func ServerID(trustDomain string) string {
-	return ServerURI(trustDomain).String()
-}
-
 func (r *SpiffeIDReconciler) makeID(pathFmt string, pathArgs ...interface{}) string {
 	id := url.URL{
 		Scheme: "spiffe",
@@ -312,8 +298,8 @@ func (r *SpiffeIDReconciler) createEntry(ctx context.Context, entry *common.Regi
 
 
 func (r *SpiffeIDReconciler) getOrCreateSpiffeID(ctx context.Context, instance *spiffeidv1beta1.SpiffeID) (string, error) {
-
-	// TODO: sanitize!
+	// Convert the selectors from the CRD to the common.Selector format
+	// needed to create the Entry on the SPIRE server
 	selectors := make([]*common.Selector, 0, len(instance.Spec.Selector.PodLabel))
 	for k, v := range instance.Spec.Selector.PodLabel {
 		selectors = append(selectors, &common.Selector{
@@ -345,8 +331,23 @@ func (r *SpiffeIDReconciler) getOrCreateSpiffeID(ctx context.Context, instance *
 			Value: fmt.Sprintf("sa:%s", instance.Spec.Selector.ServiceAccount),
 		})
 	}
+	if len(instance.Spec.Selector.ContainerName) > 0 {
+		selectors = append(selectors, &common.Selector{
+			Type:  "k8s",
+			Value: fmt.Sprintf("container-name:%s", instance.Spec.Selector.ContainerName),
+		})
+	}
+	if len(instance.Spec.Selector.ContainerImage) > 0 {
+		selectors = append(selectors, &common.Selector{
+			Type:  "k8s",
+			Value: fmt.Sprintf("container-image:%s", instance.Spec.Selector.ContainerImage),
+		})
+	}
 	for _, v := range instance.Spec.Selector.Arbitrary {
-		selectors = append(selectors, &common.Selector{Value: v})
+		selectors = append(selectors, &common.Selector{
+			Type:  "k8s",
+			Value: v,
+		})
 	}
 
 	spiffeId := instance.Spec.SpiffeId
