@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net/url"
 	"path"
-	"reflect"
 
 	"github.com/sirupsen/logrus"
 	spiffeidv1beta1 "github.com/spiffe/spire/api/spiffecrd/v1beta1"
@@ -216,12 +215,13 @@ func (r *PodReconciler) createSpiffeId(ctx context.Context, podName string, spif
 	var collisionCount int32
 	var existing spiffeidv1beta1.SpiffeID
 	for {
-		spiffeId.ObjectMeta.Name = podName + "-" + computeHash(&spiffeId.Spec, nil)
+		spiffeId.ObjectMeta.Name = podName + "-" + computeHash(&spiffeId.Spec, &collisionCount)
 		r.ctlr.c.Log.Infof("in for loop: %v", spiffeId.ObjectMeta.Name)
 		err := r.ctlr.Create(ctx, spiffeId)
 		if errors.IsAlreadyExists(err) {
 			r.ctlr.Get(ctx, types.NamespacedName{Name: spiffeId.ObjectMeta.Name, Namespace: spiffeId.ObjectMeta.Namespace}, &existing)
-			if !reflect.DeepEqual(spiffeId.Spec, existing.Spec) {
+			if spiffeId.Spec.Selector.PodUid != existing.Spec.Selector.PodUid {
+				r.ctlr.c.Log.Infof("collision detected: %v", spiffeId.ObjectMeta.Name)
 				collisionCount++
 				continue
 			}
