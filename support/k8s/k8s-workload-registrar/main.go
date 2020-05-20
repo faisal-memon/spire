@@ -76,8 +76,6 @@ func run(ctx context.Context, configPath string) error {
 		}
 		return server.Run(ctx)
 	case modeCRD:
-		// Setup all Controllers
-
 		mgr, err := controllers.NewManager()
 		if err != nil {
 			return err
@@ -100,14 +98,24 @@ func run(ctx context.Context, configPath string) error {
 		}
 
 		if config.PodController {
-			_, err := controllers.NewPodController(controllers.PodControllerConfig{
+			_, err := controllers.NewPodReconciler(controllers.PodReconcilerConfig{
 				Log:                log,
 				Mgr:                mgr,
 				TrustDomain:        config.TrustDomain,
 				PodLabel:           config.PodLabel,
 				PodAnnotation:      config.PodAnnotation,
 				DisabledNamespaces: config.DisabledNamespaces,
-				AddSvcDNSName:      config.AddSvcDNSName,
+			})
+			if err != nil {
+				return err
+			}
+		}
+
+		if config.AddSvcDNSName {
+			_, err := controllers.NewEndpointReconciler(controllers.EndpointReconcilerConfig{
+				Log:                log,
+				Mgr:                mgr,
+				DisabledNamespaces: config.DisabledNamespaces,
 			})
 			if err != nil {
 				return err

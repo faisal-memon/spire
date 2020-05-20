@@ -66,6 +66,7 @@ func NewSpiffeIDReconciler(config SpiffeIDReconcilerConfig) (*SpiffeIDReconciler
 	if err != nil {
 		return nil, err
 	}
+
 	return r, nil
 }
 
@@ -85,12 +86,8 @@ func (r *SpiffeIDReconciler) Initialize(ctx context.Context) error {
 // Reconcile ensures the SPIRE Server entry matches the corresponding CRD
 func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	r.c.Log.WithFields(logrus.Fields{
-		"namespace": req.NamespacedName.Namespace,
-		"name":      req.NamespacedName.Name,
-	}).Debug("Spiffe ID Reconcile called")
+	spiffeID := spiffeidv1beta1.SpiffeID{}
 
-	var spiffeID spiffeidv1beta1.SpiffeID
 	if err := r.Get(ctx, req.NamespacedName, &spiffeID); err != nil {
 		if !k8serrors.IsNotFound(err) {
 			r.c.Log.WithError(err).Error("unable to fetch SpiffeID")
