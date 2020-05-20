@@ -216,12 +216,10 @@ func (r *PodReconciler) createSpiffeId(ctx context.Context, podName string, spif
 	var existing spiffeidv1beta1.SpiffeID
 	for {
 		spiffeId.ObjectMeta.Name = podName + "-" + computeHash(&spiffeId.Spec, &collisionCount)
-		r.ctlr.c.Log.Infof("in for loop: %v", spiffeId.ObjectMeta.Name)
 		err := r.ctlr.Create(ctx, spiffeId)
 		if errors.IsAlreadyExists(err) {
 			r.ctlr.Get(ctx, types.NamespacedName{Name: spiffeId.ObjectMeta.Name, Namespace: spiffeId.ObjectMeta.Namespace}, &existing)
 			if spiffeId.Spec.Selector.PodUid != existing.Spec.Selector.PodUid {
-				r.ctlr.c.Log.Infof("collision detected: %v", spiffeId.ObjectMeta.Name)
 				collisionCount++
 				continue
 			}
@@ -249,17 +247,17 @@ type EndpointReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=endpoints/status,verbs=get;update;patch
 
 func (e *EndpointReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	var endpoints corev1.Endpoints
+	if containsString(e.ctlr.c.DisabledNamespaces, req.NamespacedName.Namespace) {
+		return ctrl.Result{}, nil
+	}
 
+	var endpoints corev1.Endpoints
 	ctx := context.Background()
+
 	e.ctlr.c.Log.WithFields(logrus.Fields{
 		"namespace": req.NamespacedName.Namespace,
 		"name":      req.NamespacedName.Name,
 	}).Debug("Endpoint Reconcile called")
-
-	if containsString(e.ctlr.c.DisabledNamespaces, req.NamespacedName.Namespace) {
-		return ctrl.Result{}, nil
-	}
 
 	if err := e.ctlr.Get(ctx, req.NamespacedName, &endpoints); err != nil {
 		if errors.IsNotFound(err) {

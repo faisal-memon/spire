@@ -17,7 +17,6 @@ package controllers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"path"
@@ -36,6 +35,7 @@ import (
 	spiffeidv1beta1 "github.com/spiffe/spire/api/spiffecrd/v1beta1"
 )
 
+// SpiffeIDReconcilerConfig holds the config passed in when creating the reconciler
 type SpiffeIDReconcilerConfig struct {
 	Log          logrus.FieldLogger
 	R            registration.RegistrationClient
@@ -69,8 +69,8 @@ func NewSpiffeIDReconciler(config SpiffeIDReconcilerConfig) (*SpiffeIDReconciler
 	return r, nil
 }
 
+// Initialize ensures there is a node registration entry for PSAT nodes in the cluster.
 func (r *SpiffeIDReconciler) Initialize(ctx context.Context) error {
-	// ensure there is a node registration entry for PSAT nodes in the cluster.
 	nodeID := r.nodeID()
 	r.myId = &nodeID
 	return r.createEntry(ctx, &common.RegistrationEntry{
@@ -112,7 +112,7 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	entryId, err := r.getOrCreateSpiffeID(ctx, &spiffeID)
+	entryId, err := r.updateOrCreateSpiffeID(ctx, &spiffeID)
 	if err != nil {
 		r.c.Log.WithFields(logrus.Fields{
 			"request": req,
@@ -139,24 +139,6 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 	}
 
-	currentEntry, err := r.c.R.FetchEntry(ctx, &registration.RegistrationEntryID{Id: entryId})
-	if err != nil {
-		r.c.Log.WithError(err).Error("unable to fetch current SpiffeID entry")
-		return ctrl.Result{}, err
-	}
-
-	if !equalStringSlice(currentEntry.DnsNames, spiffeID.Spec.DnsNames) {
-		r.c.Log.Info("Updating Spire Entry")
-
-		_, err := r.c.R.UpdateEntry(ctx, &registration.UpdateEntryRequest{
-			Entry: r.createCommonRegistrationEntry(spiffeID),
-		})
-		if err != nil {
-			r.c.Log.WithError(err).Error("unable to update SpiffeID with new DNS names")
-			return ctrl.Result{}, err
-		}
-	}
-
 	return ctrl.Result{}, nil
 }
 
@@ -165,7 +147,7 @@ func (r *SpiffeIDReconciler) ensureDeleted(ctx context.Context, entryId string) 
 	if _, err := r.c.R.DeleteEntry(ctx, &registration.RegistrationEntryID{Id: entryId}); err != nil {
 		if status.Code(err) != codes.NotFound {
 			if status.Code(err) == codes.Internal {
-				// Spire server currently returns a 500 if delete fails due to the entry not existing. This is probably a bug.
+				// Spire server currently returns a 500 if delete fails due to the entry not existing.
 				// We work around it by attempting to fetch the entry, and if it's not found then all is good.
 				if _, err := r.c.R.FetchEntry(ctx, &registration.RegistrationEntryID{Id: entryId}); err != nil {
 					if status.Code(err) == codes.NotFound {
@@ -198,86 +180,6 @@ func (r *SpiffeIDReconciler) nodeID() string {
 	return r.makeID("k8s-workload-registrar/%s/node", r.c.Cluster)
 }
 
-func (r *SpiffeIDReconciler) getExistingEntry(ctx context.Context, id string, selectors []*common.Selector) (string, error) {
-	entries, err := r.c.R.ListByParentID(ctx, &registration.ParentID{
-		Id: *r.myId,
-	})
-	if err != nil {
-		r.c.Log.WithError(err).Error("Failed to retrieve existing spire entry")
-		return "", err
-	}
-
-	selectorMap := map[string]bool{}
-	for _, sel := range selectors {
-		key := sel.Type + ":" + sel.Value
-		selectorMap[key] = true
-	}
-	for _, entry := range entries.Entries {
-		if entry.GetSpiffeId() == id {
-			if len(entry.GetSelectors()) != len(selectors) {
-				continue
-			}
-			found := true
-			for _, sel := range entry.GetSelectors() {
-				key := sel.Type + ":" + sel.Value
-				if _, ok := selectorMap[key]; !ok {
-					found = false
-					break
-				}
-			}
-			if found {
-				return entry.GetEntryId(), nil
-			}
-		}
-	}
-	return "", errors.New("no existing matching entry found")
-}
-
-func (r *SpiffeIDReconciler) createCommonRegistrationEntry(instance spiffeidv1beta1.SpiffeID) *common.RegistrationEntry {
-	selectors := make([]*common.Selector, 0, len(instance.Spec.Selector.PodLabel))
-	for k, v := range instance.Spec.Selector.PodLabel {
-		selectors = append(selectors, &common.Selector{
-			Type:  "k8s",
-			Value: fmt.Sprintf("pod-label:%s:%s", k, v),
-		})
-	}
-	if len(instance.Spec.Selector.PodName) > 0 {
-		selectors = append(selectors, &common.Selector{
-			Type:  "k8s",
-			Value: fmt.Sprintf("pod-name:%s", instance.Spec.Selector.PodName),
-		})
-	}
-	if len(instance.Spec.Selector.PodUid) > 0 {
-		selectors = append(selectors, &common.Selector{
-			Type:  "k8s",
-			Value: fmt.Sprintf("pod-uid:%s", instance.Spec.Selector.PodUid),
-		})
-	}
-	if len(instance.Spec.Selector.Namespace) > 0 {
-		selectors = append(selectors, &common.Selector{
-			Type:  "k8s",
-			Value: fmt.Sprintf("ns:%s", instance.Spec.Selector.Namespace),
-		})
-	}
-	if len(instance.Spec.Selector.ServiceAccount) > 0 {
-		selectors = append(selectors, &common.Selector{
-			Type:  "k8s",
-			Value: fmt.Sprintf("sa:%s", instance.Spec.Selector.ServiceAccount),
-		})
-	}
-	for _, v := range instance.Spec.Selector.Arbitrary {
-		selectors = append(selectors, &common.Selector{Value: v})
-	}
-
-	return &common.RegistrationEntry{
-		Selectors: selectors,
-		ParentId:  *r.myId,
-		SpiffeId:  instance.Spec.SpiffeId,
-		DnsNames:  instance.Spec.DnsNames,
-		EntryId:   *instance.Status.EntryId,
-	}
-}
-
 func (r *SpiffeIDReconciler) createEntry(ctx context.Context, entry *common.RegistrationEntry) error {
 	// ensure there is a node registration entry for PSAT nodes in the cluster.
 	log := r.c.Log.WithFields(logrus.Fields{
@@ -296,90 +198,102 @@ func (r *SpiffeIDReconciler) createEntry(ctx context.Context, entry *common.Regi
 	}
 }
 
+// updateOrCreateSpiffeID attempts to create a new entry. if the entry already exists, it updates it.
+func (r *SpiffeIDReconciler) updateOrCreateSpiffeID(ctx context.Context, instance *spiffeidv1beta1.SpiffeID) (string, error) {
+	spiffeId := instance.Spec.SpiffeId
+	selectors := toCommonSelector(instance.Spec.Selector)
+	commonRegistrationEntry :=  &common.RegistrationEntry{
+		Selectors: selectors,
+		ParentId:  *r.myId,
+		SpiffeId:  spiffeId,
+		DnsNames:  instance.Spec.DnsNames,
+	}
 
-func (r *SpiffeIDReconciler) getOrCreateSpiffeID(ctx context.Context, instance *spiffeidv1beta1.SpiffeID) (string, error) {
-	// Convert the selectors from the CRD to the common.Selector format
-	// needed to create the Entry on the SPIRE server
-	selectors := make([]*common.Selector, 0, len(instance.Spec.Selector.PodLabel))
-	for k, v := range instance.Spec.Selector.PodLabel {
-		selectors = append(selectors, &common.Selector{
+	createEntryIfNotExistsResponse, err := r.c.R.CreateEntryIfNotExists(ctx, commonRegistrationEntry)
+	if err != nil {
+		r.c.Log.WithError(err).Error("Failed to create spire entry")
+		return "", err
+	}
+
+	entryId := createEntryIfNotExistsResponse.Entry.EntryId
+	if createEntryIfNotExistsResponse.Preexisting {
+		existing := createEntryIfNotExistsResponse.Entry
+		if !equalStringSlice(existing.DnsNames, instance.Spec.DnsNames) {
+			r.c.Log.Info("Updating Spire Entry")
+
+			commonRegistrationEntry.EntryId = entryId
+			_, err := r.c.R.UpdateEntry(ctx, &registration.UpdateEntryRequest{
+				Entry: commonRegistrationEntry,
+			})
+			if err != nil {
+				r.c.Log.WithError(err).Error("unable to update SpiffeID with new DNS names")
+				return "", err
+			}
+		}
+	} else {
+		r.c.Log.WithFields(logrus.Fields{
+			"entryID": entryId,
+			"spiffeID": spiffeId,
+		}).Info("Created entry")
+		r.spiffeIDCollection[instance.ObjectMeta.Namespace+"/"+instance.ObjectMeta.Name] = entryId
+	}
+
+	return entryId, nil
+
+}
+
+// toCommonSelector converts the selectors from the CRD to the common.Selector format
+// needed to create the entry on the SPIRE server
+func toCommonSelector(selector spiffeidv1beta1.Selector) []*common.Selector {
+	commonSelector := make([]*common.Selector, 0, len(selector.PodLabel))
+	for k, v := range selector.PodLabel {
+		commonSelector = append(commonSelector, &common.Selector{
 			Type:  "k8s",
 			Value: fmt.Sprintf("pod-label:%s:%s", k, v),
 		})
 	}
-	if len(instance.Spec.Selector.PodName) > 0 {
-		selectors = append(selectors, &common.Selector{
+	if len(selector.PodName) > 0 {
+		commonSelector = append(commonSelector, &common.Selector{
 			Type:  "k8s",
-			Value: fmt.Sprintf("pod-name:%s", instance.Spec.Selector.PodName),
+			Value: fmt.Sprintf("pod-name:%s", selector.PodName),
 		})
 	}
-	if len(instance.Spec.Selector.PodUid) > 0 {
-		selectors = append(selectors, &common.Selector{
+	if len(selector.PodUid) > 0 {
+		commonSelector = append(commonSelector, &common.Selector{
 			Type:  "k8s",
-			Value: fmt.Sprintf("pod-uid:%s", instance.Spec.Selector.PodUid),
+			Value: fmt.Sprintf("pod-uid:%s", selector.PodUid),
 		})
 	}
-	if len(instance.Spec.Selector.Namespace) > 0 {
-		selectors = append(selectors, &common.Selector{
+	if len(selector.Namespace) > 0 {
+		commonSelector = append(commonSelector, &common.Selector{
 			Type:  "k8s",
-			Value: fmt.Sprintf("ns:%s", instance.Spec.Selector.Namespace),
+			Value: fmt.Sprintf("ns:%s", selector.Namespace),
 		})
 	}
-	if len(instance.Spec.Selector.ServiceAccount) > 0 {
-		selectors = append(selectors, &common.Selector{
+	if len(selector.ServiceAccount) > 0 {
+		commonSelector = append(commonSelector, &common.Selector{
 			Type:  "k8s",
-			Value: fmt.Sprintf("sa:%s", instance.Spec.Selector.ServiceAccount),
+			Value: fmt.Sprintf("sa:%s", selector.ServiceAccount),
 		})
 	}
-	if len(instance.Spec.Selector.ContainerName) > 0 {
-		selectors = append(selectors, &common.Selector{
+	if len(selector.ContainerName) > 0 {
+		commonSelector = append(commonSelector, &common.Selector{
 			Type:  "k8s",
-			Value: fmt.Sprintf("container-name:%s", instance.Spec.Selector.ContainerName),
+			Value: fmt.Sprintf("container-name:%s", selector.ContainerName),
 		})
 	}
-	if len(instance.Spec.Selector.ContainerImage) > 0 {
-		selectors = append(selectors, &common.Selector{
+	if len(selector.ContainerImage) > 0 {
+		commonSelector = append(commonSelector, &common.Selector{
 			Type:  "k8s",
-			Value: fmt.Sprintf("container-image:%s", instance.Spec.Selector.ContainerImage),
+			Value: fmt.Sprintf("container-image:%s", selector.ContainerImage),
 		})
 	}
-	for _, v := range instance.Spec.Selector.Arbitrary {
-		selectors = append(selectors, &common.Selector{
+	for _, v := range selector.Arbitrary {
+		commonSelector = append(commonSelector, &common.Selector{
 			Type:  "k8s",
 			Value: v,
 		})
 	}
 
-	spiffeId := instance.Spec.SpiffeId
-
-	regEntryId, err := r.c.R.CreateEntry(ctx, &common.RegistrationEntry{
-		Selectors: selectors,
-		ParentId:  *r.myId,
-		SpiffeId:  spiffeId,
-		DnsNames:  instance.Spec.DnsNames,
-	})
-	if err != nil {
-		if status.Code(err) == codes.AlreadyExists {
-			entryId, err := r.getExistingEntry(ctx, spiffeId, selectors)
-			if err != nil {
-				r.c.Log.WithError(err).Error("Failed to reuse existing spire entry")
-				return "", err
-			}
-			r.c.Log.WithFields(logrus.Fields{
-				"entryID": entryId,
-				"spiffeID": spiffeId,
-			}).Info("Found existing entry")
-			return entryId, err
-		}
-		r.c.Log.WithError(err).Error("Failed to create spire entry")
-		return "", err
-	}
-	r.spiffeIDCollection[instance.ObjectMeta.Namespace+"/"+instance.ObjectMeta.Name] = regEntryId.Id
-	r.c.Log.WithFields(logrus.Fields{
-		"entryID": regEntryId.Id,
-		"spiffeID": spiffeId,
-	}).Info("Created entry")
-
-	return regEntryId.Id, nil
-
+	return commonSelector
 }
