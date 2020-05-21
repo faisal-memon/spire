@@ -80,7 +80,7 @@ func (e *EndpointReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	svcName := req.NamespacedName.Name + "." + req.NamespacedName.Namespace + "." + "svc"
+	svcName := req.NamespacedName.Name + "." + req.NamespacedName.Namespace + ".svc"
 	for _, subset := range endpoints.Subsets {
 		for _, address := range subset.Addresses {
 			if address.TargetRef == nil {
@@ -144,9 +144,9 @@ func (e *EndpointReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 func (e *EndpointReconciler) deleteExternalResources(ctx context.Context, namespacedName types.NamespacedName) error {
-	svcName := namespacedName.Name + "." + namespacedName.Namespace
-	for _, spiffeidname := range e.svcNametoSpiffeID[svcName] {
+	svcName := namespacedName.Name + "." + namespacedName.Namespace + ".svc"
 
+	for _, spiffeidname := range e.svcNametoSpiffeID[svcName] {
 		existing := &spiffeidv1beta1.SpiffeID{}
 		if err := e.Get(ctx, types.NamespacedName{Name: spiffeidname, Namespace: namespacedName.Namespace}, existing); err != nil {
 			if !errors.IsNotFound(err) {
