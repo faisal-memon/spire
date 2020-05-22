@@ -65,9 +65,9 @@ The following configuration needs to be applied before `"crd"` mode can be used,
 
 1. the SPIFFE ID CRD needs to be applied: `kubectl apply -f config/spiffeid.spiffe.io_spiffeids.yaml`
 1. The appropriate ClusterRole need to be applied. `kubectl apply -f config/crd_role.yaml`
-  1. This creates a new ClusterRole named `spiffe-crd-role`
+   * This creates a new ClusterRole named `spiffe-crd-role`
 1. The new ClusterRole needs a ClusterRoleBinding to the SPIRE Server ServiceAcount. Change the name of the ServiceAcount and then: `kubectl apply -f config/crd_role_binding.yaml` 
-  1. This creates a new ClusterRoleBinding named `spiffe-crd-rolebinding`
+   * This creates a new ClusterRoleBinding named `spiffe-crd-rolebinding`
 
 
 ### SPIFFE ID CRD Example
