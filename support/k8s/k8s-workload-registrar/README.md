@@ -59,6 +59,47 @@ server_socket_path = "/run/spire/sockets/registration.sock"
 cluster = "production"
 ```
 
+## CRD Mode Configuration
+
+The following configuration needs to be applied before `"crd"` mode can be used, the following configuration needs to be applied:
+
+1. the SPIFFE ID CRD needs to be applied: `kubectl apply -f config/spiffeid.spiffe.io_spiffeids.yaml`
+1. The appropriate ClusterRole need to be applied. `kubectl apply -f config/crd_role.yaml`
+  1. This creates a new ClusterRole named `spiffe-crd-role`
+1. The new ClusterRole needs a ClusterRoleBinding to the SPIRE Server ServiceAcount. Change the name of the ServiceAcount and then: `kubectl apply -f config/crd_role_binding.yaml` 
+  1. This creates a new ClusterRoleBinding named `spiffe-crd-rolebinding`
+
+
+### SPIFFE ID CRD Example
+A sample SPIFFE ID CRD is below:
+
+```
+apiVersion: spiffeid.spiffe.io/v1beta1
+kind: SpiffeID
+metadata:
+  name: my-spiffe-id
+  namespace: my-namespace
+spec:
+  dnsNames:
+  - my-dns-name
+  selector:
+    namespace: default
+    podName: my-pod-name
+  spiffeId: spiffe://example.org/my-spiffe-id
+```
+
+The supported selectors are:
+- arbitrary -- Arbitrary selectors
+- containerName -- Name of the container
+- containerImage -- Container image used
+- namespace -- Namespace to match for this SPIFFE ID
+- podLabel --  Pod label name/value to match for this SPIFFE ID
+- podName -- Pod name to match for this SPIFFE ID
+- podUID --  Pod UID to match for this SPIFFE ID
+- serviceAccount -- ServiceAccount to match for this SPIFFE ID
+
+Note: Specifying DNS Names is optional.
+
 ## Node Registration
 
 On startup, the registrar creates a node registration entry that groups all
@@ -184,32 +225,4 @@ The main difference is that `"crd"` mode uses a SPIFFE ID customer resource defi
 - An optional endpoint controller (`add_svc_dns_name`) watches for endpoint events and adds the Service Name as a SAN DNS name to the SVID for all pods that are endpoints of the service. A pod can be an endpoint of multiple services and as a result can have multiple Service Names added as SAN DNS names. If a service is removed, the Service Name is removed from the SVID of all endpoint Pods. The format of the DNS name is `<service_name>.<namespace>.svc`
 - A new option to disable namespaces from auto-injection (`disabled_namespaces`). By default `kube-system` is disabled for auto-injection.
 
-### SPIFFE ID CRD
-A sample SPIFFE ID CRD is below:
 
-```
-apiVersion: spiffeid.spiffe.io/v1beta1
-kind: SpiffeID
-metadata:
-  name: my-spiffe-id
-  namespace: my-namespace
-spec:
-  dnsNames:
-  - my-dns-name
-  selector:
-    namespace: default
-    podName: my-pod-name
-  spiffeId: spiffe://example.org/my-spiffe-id
-```
-
-The support selectors are:
-- arbitrary -- Arbitrary selectors
-- containerName -- Name of the container
-- containerImage -- Container image used
-- namespace -- Namespace to match for this SPIFFE ID
-- podLabel --  Pod label name/value to match for this SPIFFE ID
-- podName -- Pod name to match for this SPIFFE ID
-- podUID --  Pod UID to match for this SPIFFE ID
-- serviceAccount -- ServiceAccount to match for this SPIFFE ID
-
-Note: Specifying DNS Names is optional.
