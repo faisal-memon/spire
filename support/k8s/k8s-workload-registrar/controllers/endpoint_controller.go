@@ -29,18 +29,21 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// EndpointReconcilerConfig holds the config passed in when creating the reconciler
 type EndpointReconcilerConfig struct {
 	Log           logrus.FieldLogger
 	Mgr           ctrl.Manager
 	DisabledNamespaces []string
 }
 
+// EndpointReconciler holds the runtime configuration and state of this controller
 type EndpointReconciler struct {
 	client.Client
 	c                  EndpointReconcilerConfig
 	svcNametoSpiffeID  map[string][]string
 }
 
+// NewEndpointReconciler creates a new EndpointReconciler object
 func NewEndpointReconciler(config EndpointReconcilerConfig) (*EndpointReconciler, error) {
 	r := &EndpointReconciler {
 		Client:            config.Mgr.GetClient(),
@@ -58,6 +61,8 @@ func NewEndpointReconciler(config EndpointReconcilerConfig) (*EndpointReconciler
 	return r, nil
 }
 
+// Reconcile steps through the endpoints for each service and adds the name of the service as
+// a DNS name to the SPIFFE ID CRD
 func (e *EndpointReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if containsString(e.c.DisabledNamespaces, req.NamespacedName.Namespace) {
 		return ctrl.Result{}, nil
@@ -143,6 +148,8 @@ func (e *EndpointReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	return ctrl.Result{}, nil
 }
+
+// deleteExternalResources remove the service name from the list of DNS Names when the service is removed
 func (e *EndpointReconciler) deleteExternalResources(ctx context.Context, namespacedName types.NamespacedName) error {
 	svcName := namespacedName.Name + "." + namespacedName.Namespace + ".svc"
 

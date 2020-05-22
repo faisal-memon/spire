@@ -24,16 +24,28 @@ The configuration file is a **required** by the registrar. It contains
 | -------------------------- | --------| ---------| ----------------------------------------- | ------- |
 | `log_level`                | string  | required | Log level (one of `"panic"`,`"fatal"`,`"error"`,`"warn"`, `"warning"`,`"info"`,`"debug"`,`"trace"`) | `"info"` |
 | `log_path`                 | string  | optional | Path on disk to write the log | |
-| `addr`                     | string  | required | Address to bind the HTTPS listener to | `":8443"` |
-| `cert_path`                | string  | required | Path on disk to the PEM-encoded server TLS certificate | `"cert.pem"` |
-| `key_path`                 | string  | required | Path on disk to the PEM-encoded server TLS key |  `"key.pem"` |
-| `cacert_path`              | string  | required | Path on disk to the CA certificate used to verify the client (i.e. API server) | `"cacert.pem"` |
-| `insecure_skip_client_verification`  | boolean | required | If true, skips client certificate verification (in which case `cacert_path` is ignored). See [Security Considerations](#security-considerations) for more details. | `false` |
 | `trust_domain`             | string  | required | Trust domain of the SPIRE server | |
 | `server_socket_path`       | string  | required | Path to the Unix domain socket of the SPIRE server | |
 | `cluster`                  | string  | required | Logical cluster to register nodes/workloads under. Must match the SPIRE SERVER PSAT node attestor configuration. | |
 | `pod_label`                | string  | optional | The pod label used for [Label Based Workload Registration](#label-based-workload-registration) | |
 | `pod_annotation`           | string  | optional | The pod annotation used for [Annotation Based Workload Registration](#annotation-based-workload-registration) | |
+| `mode`                     | string  | optional | How to run the registrar, either using a `"webhook"` or `"crd"`. See [Differences](#differences) for more details. | `"webhook"` |
+
+The following configuration directives are specific to `"webhook"` mode:
+
+| Key                        | Type    | Required? | Description                              | Default |
+| -------------------------- | --------| ---------| ----------------------------------------- | ------- |
+| `addr`                     | string  | required | Address to bind the HTTPS listener to | `":8443"` |
+| `cert_path`                | string  | required | Path on disk to the PEM-encoded server TLS certificate | `"cert.pem"` |
+| `key_path`                 | string  | required | Path on disk to the PEM-encoded server TLS key |  `"key.pem"` |
+| `cacert_path`              | string  | required | Path on disk to the CA certificate used to verify the client (i.e. API server) | `"cacert.pem"` |
+| `insecure_skip_client_verification`  | boolean | required | If true, skips client certificate verification (in which case `cacert_path` is ignored). See [Security Considerations](#security-considerations) for more details. | `false` |
+
+The following configuration directives are specific to `"crd"` mode:
+
+| Key                        | Type    | Required? | Description                              | Default |
+| -------------------------- | --------| ---------| ----------------------------------------- | ------- |
+| `pod_controller`           | bool    | optional | Enable auto generation of SVIDs for new pods that are created | `true` |
 | `add_svc_dns_name`         | bool    | optional | Enable adding service names as SAN DNS names to endpoint pods | `true` |
 | `disabled_namespaces`      | []string| optional | Comma seperated list of namespaces to disable auto SVID generation for | `"kube-system"` |
 
@@ -162,3 +174,42 @@ provide indirect access to the SPIRE server registration API, albeit scoped. It
 is *NOT* recommended to skip client verification (via the
 `insecure_skip_client_verification` configurable) unless you fully understand
 the risks.
+
+## Differences between webhook and crd modes
+
+The main difference is that `"crd"` mode uses a SPIFFE ID customer resource definition(CRD) along with controllers, instead of a Validating Admission Webhook.
+
+- A namespace scoped SpiffeID CRD is defined. A controller watches for create, update, delete, etc. events and creates entries on the SPIRE Server accordingly.
+- An option pod controller (`pod_controller`) watches for POD events and creates/deletes SpiffeID CRDs accordingly. The pod controller sets the pod as the controller owner of the SPIFFE ID CRD so it is automatically garbage collected if the POD is deleted. The pod controller add the pod name as the first DNS name, which makes it also populate the CN field of the SVID.
+- An optional endpoint controller (`add_svc_dns_name`) watches for endpoint events and adds the Service Name as a SAN DNS name to the SVID for all pods that are endpoints of the service. A pod can be an endpoint of multiple services and as a result can have multiple Service Names added as SAN DNS names. If a service is removed, the Service Name is removed from the SVID of all endpoint Pods. The format of the DNS name is `<service_name>.<namespace>.svc`
+- A new option to disable namespaces from auto-injection (`disabled_namespaces`). By default `kube-system` is disabled for auto-injection.
+
+### SPIFFE ID CRD
+A sample SPIFFE ID CRD is below:
+
+```
+apiVersion: spiffeid.spiffe.io/v1beta1
+kind: SpiffeID
+metadata:
+  name: my-spiffe-id
+  namespace: my-namespace
+spec:
+  dnsNames:
+  - my-dns-name
+  selector:
+    namespace: default
+    podName: my-pod-name
+  spiffeId: spiffe://example.org/my-spiffe-id
+```
+
+The support selectors are:
+- arbitrary -- Arbitrary selectors
+- containerName -- Name of the container
+- containerImage -- Container image used
+- namespace -- Namespace to match for this SPIFFE ID
+- podLabel --  Pod label name/value to match for this SPIFFE ID
+- podName -- Pod name to match for this SPIFFE ID
+- podUID --  Pod UID to match for this SPIFFE ID
+- serviceAccount -- ServiceAccount to match for this SPIFFE ID
+
+Note: Specifying DNS Names is optional.

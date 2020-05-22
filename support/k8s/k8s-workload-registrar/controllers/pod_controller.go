@@ -43,6 +43,7 @@ const (
 	PodReconcilerModeAnnotation
 )
 
+// PodReconcilerConfig holds the config passed in when creating the reconciler
 type PodReconcilerConfig struct {
 	Log                logrus.FieldLogger
 	Mgr                ctrl.Manager
@@ -52,6 +53,7 @@ type PodReconcilerConfig struct {
 	DisabledNamespaces []string
 }
 
+// PodReconciler holds the runtime configuration and state of this controller
 type PodReconciler struct {
 	client.Client
 	c              PodReconcilerConfig
@@ -60,6 +62,7 @@ type PodReconciler struct {
 	Value          string
 }
 
+// NewPodReconciler creates a new PodReconciler object
 func NewPodReconciler(config PodReconcilerConfig) (*PodReconciler, error) {
 	mode := PodReconcilerModeServiceAccount
 	value := ""
@@ -188,6 +191,8 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
+// createSpiffeId attempts to create the SPIFFE ID object. It uses the pod name appeneded with hash of the SPIFFE ID Spec
+// to create a unique name.
 func (r *PodReconciler) createSpiffeId(ctx context.Context, podName string, spiffeId *spiffeidv1beta1.SpiffeID) error {
 	var collisionCount int32
 	var existing spiffeidv1beta1.SpiffeID

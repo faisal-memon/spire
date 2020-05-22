@@ -44,7 +44,7 @@ type SpiffeIDReconcilerConfig struct {
 	Mgr          ctrl.Manager
 }
 
-// SpiffeIDReconciler reconciles a SpiffeID object
+// SpiffeIDReconciler holds the runtime configuration and state of this controller
 type SpiffeIDReconciler struct {
 	client.Client
 	c                  SpiffeIDReconcilerConfig
@@ -52,7 +52,7 @@ type SpiffeIDReconciler struct {
 	spiffeIDCollection map[string]string
 }
 
-// NewSpiffeIDReconciler create a new SpiffeIDReconciler object
+// NewSpiffeIDReconciler creates a new SpiffeIDReconciler object
 func NewSpiffeIDReconciler(config SpiffeIDReconcilerConfig) (*SpiffeIDReconciler, error) {
 	r := &SpiffeIDReconciler {
 		Client: config.Mgr.GetClient(),
@@ -139,7 +139,7 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
-
+// ensureDeleted deletes the specified entry on the SPIRE Server
 func (r *SpiffeIDReconciler) ensureDeleted(ctx context.Context, entryId string) error {
 	if _, err := r.c.R.DeleteEntry(ctx, &registration.RegistrationEntryID{Id: entryId}); err != nil {
 		if status.Code(err) != codes.NotFound {
@@ -162,37 +162,6 @@ func (r *SpiffeIDReconciler) ensureDeleted(ctx context.Context, entryId string) 
 		"entry": entryId,
 	}).Info("Deleted entry")
 	return nil
-}
-
-func (r *SpiffeIDReconciler) makeID(pathFmt string, pathArgs ...interface{}) string {
-	id := url.URL{
-		Scheme: "spiffe",
-		Host:   r.c.TrustDomain,
-		Path:   path.Clean(fmt.Sprintf(pathFmt, pathArgs...)),
-	}
-	return id.String()
-}
-
-func (r *SpiffeIDReconciler) nodeID() string {
-	return r.makeID("k8s-workload-registrar/%s/node", r.c.Cluster)
-}
-
-func (r *SpiffeIDReconciler) createEntry(ctx context.Context, entry *common.RegistrationEntry) error {
-	// ensure there is a node registration entry for PSAT nodes in the cluster.
-	log := r.c.Log.WithFields(logrus.Fields{
-		"parent_id": entry.ParentId,
-		"spiffe_id": entry.SpiffeId,
-		"selectors": selectorsField(entry.Selectors),
-	})
-	_, err := r.c.R.CreateEntry(ctx, entry)
-	switch status.Code(err) {
-	case codes.OK, codes.AlreadyExists:
-		log.Info("Created pod entry")
-		return nil
-	default:
-		log.WithError(err).Error("Failed to create pod entry")
-		return errs.Wrap(err)
-	}
 }
 
 // updateOrCreateSpiffeID attempts to create a new entry. if the entry already exists, it updates it.
@@ -293,4 +262,35 @@ func toCommonSelector(selector spiffeidv1beta1.Selector) []*common.Selector {
 	}
 
 	return commonSelector
+}
+
+func (r *SpiffeIDReconciler) makeID(pathFmt string, pathArgs ...interface{}) string {
+	id := url.URL{
+		Scheme: "spiffe",
+		Host:   r.c.TrustDomain,
+		Path:   path.Clean(fmt.Sprintf(pathFmt, pathArgs...)),
+	}
+	return id.String()
+}
+
+func (r *SpiffeIDReconciler) nodeID() string {
+	return r.makeID("k8s-workload-registrar/%s/node", r.c.Cluster)
+}
+
+func (r *SpiffeIDReconciler) createEntry(ctx context.Context, entry *common.RegistrationEntry) error {
+	// ensure there is a node registration entry for PSAT nodes in the cluster.
+	log := r.c.Log.WithFields(logrus.Fields{
+		"parent_id": entry.ParentId,
+		"spiffe_id": entry.SpiffeId,
+		"selectors": selectorsField(entry.Selectors),
+	})
+	_, err := r.c.R.CreateEntry(ctx, entry)
+	switch status.Code(err) {
+	case codes.OK, codes.AlreadyExists:
+		log.Info("Created pod entry")
+		return nil
+	default:
+		log.WithError(err).Error("Failed to create pod entry")
+		return errs.Wrap(err)
+	}
 }
