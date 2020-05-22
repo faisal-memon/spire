@@ -29,7 +29,7 @@ The configuration file is a **required** by the registrar. It contains
 | `cluster`                  | string  | required | Logical cluster to register nodes/workloads under. Must match the SPIRE SERVER PSAT node attestor configuration. | |
 | `pod_label`                | string  | optional | The pod label used for [Label Based Workload Registration](#label-based-workload-registration) | |
 | `pod_annotation`           | string  | optional | The pod annotation used for [Annotation Based Workload Registration](#annotation-based-workload-registration) | |
-| `mode`                     | string  | optional | How to run the registrar, either using a `"webhook"` or `"crd"`. See [Differences](#differences) for more details. | `"webhook"` |
+| `mode`                     | string  | optional | How to run the registrar, either using a `"webhook"` or `"crd"`. See [Differences](#differences-between-webhook-and-crd-modes) for more details. | `"webhook"` |
 
 The following configuration directives are specific to `"webhook"` mode:
 
