@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -177,7 +178,7 @@ func (s *ClientSuite) TestGetPodFailsToLoadClient() {
 func (s *ClientSuite) TestGetPodFailsIfGetsErrorFromAPIServer() {
 	s.mockClientset.EXPECT().CoreV1().Return(s.mockCoreV1).Times(1)
 	s.mockCoreV1.EXPECT().Pods("NAMESPACE").Return(s.mockPods).Times(1)
-	s.mockPods.EXPECT().Get("PODNAME", metav1.GetOptions{}).Return(nil, errors.New("an error"))
+	s.mockPods.EXPECT().Get(context.TODO(), "PODNAME", metav1.GetOptions{}).Return(nil, errors.New("an error"))
 
 	client := s.createClient()
 	pod, err := client.GetPod("NAMESPACE", "PODNAME")
@@ -188,7 +189,7 @@ func (s *ClientSuite) TestGetPodFailsIfGetsErrorFromAPIServer() {
 func (s *ClientSuite) TestGetPodFailsIfGetsNilPod() {
 	s.mockClientset.EXPECT().CoreV1().Return(s.mockCoreV1).Times(1)
 	s.mockCoreV1.EXPECT().Pods("NAMESPACE").Return(s.mockPods).Times(1)
-	s.mockPods.EXPECT().Get("PODNAME", metav1.GetOptions{}).Return(nil, nil)
+	s.mockPods.EXPECT().Get(context.TODO(), "PODNAME", metav1.GetOptions{}).Return(nil, nil)
 
 	client := s.createClient()
 	pod, err := client.GetPod("NAMESPACE", "PODNAME")
@@ -200,7 +201,7 @@ func (s *ClientSuite) TestGetPodSucceeds() {
 	s.mockClientset.EXPECT().CoreV1().Return(s.mockCoreV1).Times(1)
 	s.mockCoreV1.EXPECT().Pods("NAMESPACE").Return(s.mockPods).Times(1)
 	expectedPod := createPod("PODNAME")
-	s.mockPods.EXPECT().Get("PODNAME", metav1.GetOptions{}).Return(expectedPod, nil)
+	s.mockPods.EXPECT().Get(context.TODO(), "PODNAME", metav1.GetOptions{}).Return(expectedPod, nil)
 
 	client := s.createClient()
 	pod, err := client.GetPod("NAMESPACE", "PODNAME")
@@ -225,7 +226,7 @@ func (s *ClientSuite) TestGetNodeFailsToLoadClient() {
 func (s *ClientSuite) TestGetNodeFailsIfGetsErrorFromAPIServer() {
 	s.mockClientset.EXPECT().CoreV1().Return(s.mockCoreV1).Times(1)
 	s.mockCoreV1.EXPECT().Nodes().Return(s.mockNodes).Times(1)
-	s.mockNodes.EXPECT().Get("NODENAME", metav1.GetOptions{}).Return(nil, errors.New("an error"))
+	s.mockNodes.EXPECT().Get(context.TODO(), "NODENAME", metav1.GetOptions{}).Return(nil, errors.New("an error"))
 
 	client := s.createClient()
 	node, err := client.GetNode("NODENAME")
@@ -236,7 +237,7 @@ func (s *ClientSuite) TestGetNodeFailsIfGetsErrorFromAPIServer() {
 func (s *ClientSuite) TestGetNodeFailsIfGetsNilNode() {
 	s.mockClientset.EXPECT().CoreV1().Return(s.mockCoreV1).Times(1)
 	s.mockCoreV1.EXPECT().Nodes().Return(s.mockNodes).Times(1)
-	s.mockNodes.EXPECT().Get("NODENAME", metav1.GetOptions{}).Return(nil, nil)
+	s.mockNodes.EXPECT().Get(context.TODO(), "NODENAME", metav1.GetOptions{}).Return(nil, nil)
 
 	client := s.createClient()
 	node, err := client.GetNode("NODENAME")
@@ -248,7 +249,7 @@ func (s *ClientSuite) TestGetNodeSucceeds() {
 	s.mockClientset.EXPECT().CoreV1().Return(s.mockCoreV1).Times(1)
 	s.mockCoreV1.EXPECT().Nodes().Return(s.mockNodes).Times(1)
 	expectedNode := createNode("NODENAME")
-	s.mockNodes.EXPECT().Get("NODENAME", metav1.GetOptions{}).Return(expectedNode, nil)
+	s.mockNodes.EXPECT().Get(context.TODO(), "NODENAME", metav1.GetOptions{}).Return(expectedNode, nil)
 
 	client := s.createClient()
 	node, err := client.GetNode("NODENAME")
@@ -267,7 +268,7 @@ func (s *ClientSuite) TestValidateTokenFailsIfGetsErrorFromAPIServer() {
 	s.mockClientset.EXPECT().AuthenticationV1().Return(s.mockAuthV1).Times(1)
 	s.mockAuthV1.EXPECT().TokenReviews().Return(s.mockTokenReviews).Times(1)
 	req := createTokenReview([]string{"aud1"})
-	s.mockTokenReviews.EXPECT().Create(req).Return(nil, errors.New("an error"))
+	s.mockTokenReviews.EXPECT().Create(context.TODO(), req, metav1.CreateOptions{}).Return(nil, errors.New("an error"))
 
 	client := s.createClient()
 	status, err := client.ValidateToken(testToken, []string{"aud1"})
@@ -279,7 +280,7 @@ func (s *ClientSuite) TestValidateTokenFailsIfGetsNilResponse() {
 	s.mockClientset.EXPECT().AuthenticationV1().Return(s.mockAuthV1).Times(1)
 	s.mockAuthV1.EXPECT().TokenReviews().Return(s.mockTokenReviews).Times(1)
 	req := createTokenReview([]string{"aud1"})
-	s.mockTokenReviews.EXPECT().Create(req).Return(nil, nil)
+	s.mockTokenReviews.EXPECT().Create(context.TODO(), req, metav1.CreateOptions{}).Return(nil, nil)
 
 	client := s.createClient()
 	status, err := client.ValidateToken(testToken, []string{"aud1"})
@@ -294,7 +295,7 @@ func (s *ClientSuite) TestValidateTokenFailsIfStatusContainsError() {
 	req := createTokenReview([]string{"aud1"})
 	resp := *req
 	resp.Status.Error = "an error"
-	s.mockTokenReviews.EXPECT().Create(req).Return(&resp, nil)
+	s.mockTokenReviews.EXPECT().Create(context.TODO(), req, metav1.CreateOptions{}).Return(&resp, nil)
 
 	client := s.createClient()
 	status, err := client.ValidateToken(testToken, []string{"aud1"})
@@ -309,7 +310,7 @@ func (s *ClientSuite) TestValidateTokenSucceeds() {
 	req := createTokenReview([]string{"aud1"})
 	resp := *req
 	resp.Status.Authenticated = true
-	s.mockTokenReviews.EXPECT().Create(req).Return(&resp, nil)
+	s.mockTokenReviews.EXPECT().Create(context.TODO(), req, metav1.CreateOptions{}).Return(&resp, nil)
 
 	client := s.createClient()
 	status, err := client.ValidateToken(testToken, []string{"aud1"})
