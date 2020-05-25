@@ -102,5 +102,4 @@ func ParseConfig(hclConfig string) (*Config, error) {
 
 func defaultDisabledNamespaces() []string {
 	return []string{"kube-system"}
-
 }

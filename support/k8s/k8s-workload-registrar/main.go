@@ -125,7 +125,6 @@ func run(ctx context.Context, configPath string) error {
 		if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 			return err
 		}
-
 	}
 
 	return nil

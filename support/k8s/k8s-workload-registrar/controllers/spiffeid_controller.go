@@ -205,7 +205,6 @@ func (r *SpiffeIDReconciler) updateOrCreateSpiffeID(ctx context.Context, instanc
 	}
 
 	return entryId, nil
-
 }
 
 // toCommonSelector converts the selectors from the CRD to the common.Selector format
