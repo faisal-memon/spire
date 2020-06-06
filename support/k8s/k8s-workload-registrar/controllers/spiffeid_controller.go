@@ -90,7 +90,7 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if err := r.Get(ctx, req.NamespacedName, &spiffeID); err != nil {
 		if !k8serrors.IsNotFound(err) {
-			r.c.Log.WithError(err).Error("unable to fetch SpiffeID")
+			r.c.Log.WithError(err).Error("Unable to fetch SpiffeID CRD")
 			return ctrl.Result{}, err
 		}
 
@@ -98,7 +98,7 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		if err := r.ensureDeleted(ctx, r.spiffeIDCollection[req.NamespacedName.String()]); err != nil {
 			r.c.Log.WithFields(logrus.Fields{
 				"entryid": r.spiffeIDCollection[req.NamespacedName.String()],
-			}).WithError(err).Error("unable to delete spire entry", )
+			}).WithError(err).Error("Unable to delete registration entry")
 			return ctrl.Result{}, err
 		}
 		delete(r.spiffeIDCollection, req.NamespacedName.String())
@@ -113,7 +113,7 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err != nil {
 		r.c.Log.WithFields(logrus.Fields{
 			"request": req,
-		}).WithError(err).Error(err, "unable to get or create spire entry")
+		}).WithError(err).Error(err, "Unable to get or create registration entry")
 		return ctrl.Result{}, err
 	}
 
@@ -125,7 +125,7 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			if err := r.ensureDeleted(ctx, *spiffeID.Status.EntryId); err != nil {
 				r.c.Log.WithFields(logrus.Fields{
 					"entryid": *spiffeID.Status.EntryId,
-				}).WithError(err).Error("unable to delete old spire entry")
+				}).WithError(err).Error("Unable to delete old registration entry")
 				return ctrl.Result{}, err
 			}
 		}
@@ -177,7 +177,7 @@ func (r *SpiffeIDReconciler) updateOrCreateSpiffeID(ctx context.Context, instanc
 
 	createEntryIfNotExistsResponse, err := r.c.R.CreateEntryIfNotExists(ctx, commonRegistrationEntry)
 	if err != nil {
-		r.c.Log.WithError(err).Error("Failed to create spire entry")
+		r.c.Log.WithError(err).Error("Failed to create registration entry")
 		return "", err
 	}
 
@@ -192,7 +192,7 @@ func (r *SpiffeIDReconciler) updateOrCreateSpiffeID(ctx context.Context, instanc
 				Entry: commonRegistrationEntry,
 			})
 			if err != nil {
-				r.c.Log.WithError(err).Error("unable to update SpiffeID with new DNS names")
+				r.c.Log.WithError(err).Error("Unable to update SpiffeID CRD with new DNS names")
 				return "", err
 			}
 		}

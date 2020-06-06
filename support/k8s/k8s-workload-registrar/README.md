@@ -61,12 +61,12 @@ cluster = "production"
 
 ## CRD Mode Configuration
 
-The following configuration needs to be applied before `"crd"` mode can be used, the following configuration needs to be applied:
+The following configuration is required before `"crd"` mode can be used:
 
-1. the SPIFFE ID CRD needs to be applied: `kubectl apply -f config/spiffeid.spiffe.io_spiffeids.yaml`
+1. The SPIFFE ID CRD needs to be applied: `kubectl apply -f config/spiffeid.spiffe.io_spiffeids.yaml`
 1. The appropriate ClusterRole need to be applied. `kubectl apply -f config/crd_role.yaml`
    * This creates a new ClusterRole named `spiffe-crd-role`
-1. The new ClusterRole needs a ClusterRoleBinding to the SPIRE Server ServiceAcount. Change the name of the ServiceAcount and then: `kubectl apply -f config/crd_role_binding.yaml` 
+1. The new ClusterRole needs a ClusterRoleBinding to the SPIRE Server ServiceAccount. Change the name of the ServiceAccount and then: `kubectl apply -f config/crd_role_binding.yaml` 
    * This creates a new ClusterRoleBinding named `spiffe-crd-rolebinding`
 
 
@@ -221,8 +221,6 @@ the risks.
 The main difference is that `"crd"` mode uses a SPIFFE ID customer resource definition(CRD) along with controllers, instead of a Validating Admission Webhook.
 
 - A namespace scoped SpiffeID CRD is defined. A controller watches for create, update, delete, etc. events and creates entries on the SPIRE Server accordingly.
-- An option pod controller (`pod_controller`) watches for POD events and creates/deletes SpiffeID CRDs accordingly. The pod controller sets the pod as the controller owner of the SPIFFE ID CRD so it is automatically garbage collected if the POD is deleted. The pod controller add the pod name as the first DNS name, which makes it also populate the CN field of the SVID.
-- An optional endpoint controller (`add_svc_dns_name`) watches for endpoint events and adds the Service Name as a SAN DNS name to the SVID for all pods that are endpoints of the service. A pod can be an endpoint of multiple services and as a result can have multiple Service Names added as SAN DNS names. If a service is removed, the Service Name is removed from the SVID of all endpoint Pods. The format of the DNS name is `<service_name>.<namespace>.svc`
+- An optional pod controller (`pod_controller`) watches for POD events and creates/deletes SpiffeID CRDs accordingly. The pod controller sets the pod as the controller owner of the SPIFFE ID CRD so it is automatically garbage collected if the POD is deleted. The pod controller add the pod name as the first DNS name, which SPIRE adds as both a DNS SAN and the CN field on the SVID.
+- An optional endpoint controller (`add_svc_dns_name`) watches for endpoint events and adds the Service Name as a DNS SAN to the SVID for all pods that are endpoints of the service. A pod can be an endpoint of multiple services and as a result can have multiple Service Names added as DNS SANs. If a service is removed, the Service Name is removed from the SVID of all endpoint Pods. The format of the DNS SAN is `<service_name>.<namespace>.svc`
 - A new option to disable namespaces from auto-injection (`disabled_namespaces`). By default `kube-system` is disabled for auto-injection.
-
-

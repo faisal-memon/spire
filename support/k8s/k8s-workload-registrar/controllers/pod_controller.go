@@ -104,7 +104,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if err := r.Get(ctx, req.NamespacedName, &pod); err != nil {
 		if !errors.IsNotFound(err) {
-			r.c.Log.WithError(err).Error("unable to fetch Pod")
+			r.c.Log.WithError(err).Error("Unable to fetch Pod")
 			return ctrl.Result{}, err
 		}
 
@@ -153,8 +153,8 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	err := controllerutil.SetControllerReference(&pod, spiffeId, r.Scheme)
 	if err != nil {
 		r.c.Log.WithFields(logrus.Fields{
-			"SpiffeID.Name": spiffeId.Name,
-		}).WithError(err).Error("Failed to set pod as owner of new SpiffeID")
+			"spiffe-id-crd-name": spiffeId.Name,
+		}).WithError(err).Error("Failed to set pod as owner of new SpiffeID CRD")
 		return ctrl.Result{}, err
 	}
 
