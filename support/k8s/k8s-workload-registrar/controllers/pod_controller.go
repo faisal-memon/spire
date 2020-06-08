@@ -173,9 +173,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			}
 			pod.ObjectMeta.Labels["spiffe.io/spiffeid"] = spiffeId.ObjectMeta.Name
 
-			err = r.Update(ctx, &pod)
-
-			return err
+			return r.Update(ctx, &pod)
 		})
 		if retryErr != nil {
 			r.c.Log.WithError(retryErr).Error("Update failed")
