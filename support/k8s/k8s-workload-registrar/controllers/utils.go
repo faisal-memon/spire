@@ -114,3 +114,16 @@ func containsString(slice []string, s string) bool {
 	}
 	return false
 }
+
+func removeStringIf(slice []string, s string) []string {
+	i := 0 // output index
+	for _, item := range slice {
+		if item != s {
+			// copy and increment index
+			slice[i] = item
+			i++
+		}
+	}
+
+	return slice[:i]
+}

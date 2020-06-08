@@ -183,16 +183,8 @@ func (e *EndpointReconciler) deleteExternalResources(ctx context.Context, namesp
 			e.c.Log.WithFields(logrus.Fields{
 				"service": svcName,
 			}).Info("Deleting DNS names on SpiffeID CRD")
-			i := 0 // output index
-			for _, dnsName := range existing.Spec.DnsNames {
-				if dnsName != svcName {
-					// copy and increment index
-					existing.Spec.DnsNames[i] = dnsName
-					i++
-				}
-			}
 
-			existing.Spec.DnsNames = existing.Spec.DnsNames[:i]
+			existing.Spec.DnsNames = removeStringIf(existing.Spec.DnsNames, svcName)
 			if err := e.Update(ctx, existing); err != nil {
 				e.c.Log.WithFields(logrus.Fields{
 					"name": spiffeidname,
