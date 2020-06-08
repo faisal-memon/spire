@@ -57,9 +57,9 @@ type PodReconcilerConfig struct {
 type PodReconciler struct {
 	client.Client
 	c              PodReconcilerConfig
-	Scheme         *runtime.Scheme
-	Mode           PodReconcilerMode
-	Value          string
+	scheme         *runtime.Scheme
+	mode           PodReconcilerMode
+	value          string
 }
 
 // NewPodReconciler creates a new PodReconciler object
@@ -78,9 +78,9 @@ func NewPodReconciler(config PodReconcilerConfig) (*PodReconciler, error) {
 	r := &PodReconciler {
 		Client: config.Mgr.GetClient(),
 		c:      config,
-		Mode:   mode,
-		Value:  value,
-		Scheme: config.Mgr.GetScheme(),
+		mode:   mode,
+		value:  value,
+		scheme: config.Mgr.GetScheme(),
 	}
 
 	err := ctrl.NewControllerManagedBy(config.Mgr).
@@ -115,18 +115,18 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	spiffeIdUri := ""
-	switch r.Mode {
+	switch r.mode {
 	case PodReconcilerModeServiceAccount:
 		spiffeIdUri = r.makeID("ns/%s/sa/%s", req.Namespace, pod.Spec.ServiceAccountName)
 	case PodReconcilerModeLabel:
-		if val, ok := pod.GetLabels()[r.Value]; ok {
+		if val, ok := pod.GetLabels()[r.value]; ok {
 			spiffeIdUri = r.makeID("%s", val)
 		} else {
 			// No relevant label
 			return ctrl.Result{}, nil
 		}
 	case PodReconcilerModeAnnotation:
-		if val, ok := pod.GetAnnotations()[r.Value]; ok {
+		if val, ok := pod.GetAnnotations()[r.value]; ok {
 			spiffeIdUri = r.makeID("%s", val)
 		} else {
 			// No relevant annotation
@@ -150,7 +150,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// Set pod as owner of new SPIFFE ID
-	err := controllerutil.SetControllerReference(&pod, spiffeId, r.Scheme)
+	err := controllerutil.SetControllerReference(&pod, spiffeId, r.scheme)
 	if err != nil {
 		r.c.Log.WithFields(logrus.Fields{
 			"spiffe-id-crd-name": spiffeId.Name,
