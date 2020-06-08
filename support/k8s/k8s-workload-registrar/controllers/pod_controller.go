@@ -137,11 +137,10 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	spiffeId := &spiffeidv1beta1.SpiffeID{
 		ObjectMeta: v1.ObjectMeta{
 			Namespace:   pod.Namespace,
-			Annotations: make(map[string]string),
 		},
 		Spec: spiffeidv1beta1.SpiffeIDSpec{
 			SpiffeId: spiffeIdUri,
-			DnsNames: make([]string, 0),
+			DnsNames: []string{pod.Name}, // Set pod name as first DNS name
 			Selector: spiffeidv1beta1.Selector{
 				PodUid:    pod.GetUID(),
 				Namespace: pod.Namespace,
@@ -157,9 +156,6 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}).WithError(err).Error("Failed to set pod as owner of new SpiffeID CRD")
 		return ctrl.Result{}, err
 	}
-
-	// Set pod name as first DNS name
-	spiffeId.Spec.DnsNames = append(spiffeId.Spec.DnsNames, pod.Name)
 
 	err = r.createSpiffeId(ctx, pod.ObjectMeta.Name, spiffeId)
 	if err != nil {
