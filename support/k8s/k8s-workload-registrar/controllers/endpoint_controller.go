@@ -85,31 +85,45 @@ func (e *EndpointReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	svcName := req.NamespacedName.Name + "." + req.NamespacedName.Namespace + ".svc"
+	svcName := getServiceDNSName(req.NamespacedName)
 	for _, subset := range endpoints.Subsets {
 		for _, address := range subset.Addresses {
 			if address.TargetRef == nil {
 				continue
 			}
+
+			// Retrieve pod object for this endpoint
 			pod := corev1.Pod{}
-			if err := e.Get(ctx, types.NamespacedName{Name: address.TargetRef.Name, Namespace: address.TargetRef.Namespace}, &pod); err != nil {
+			podNamespacedName := types.NamespacedName{
+				Name: address.TargetRef.Name,
+				Namespace: address.TargetRef.Namespace,
+			}
+			if err := e.Get(ctx, podNamespacedName, &pod); err != nil {
 				e.c.Log.WithError(err).Error("Error retrieving pod")
 				return ctrl.Result{}, err
 			}
-			spiffeidname := pod.ObjectMeta.Labels["spiffe.io/spiffeid"]
+
+			// Retrieve SPIFFE ID CRD for the pod
 			existing := &spiffeidv1beta1.SpiffeID{}
-			if err := e.Get(ctx, types.NamespacedName{Name: spiffeidname, Namespace: address.TargetRef.Namespace}, existing); err != nil {
+			spiffeIdName := pod.ObjectMeta.Labels["spiffe.io/spiffeid"]
+			spiffeIdNamespacedName := types.NamespacedName{
+				Name: spiffeIdName,
+				Namespace: address.TargetRef.Namespace,
+			}
+			if err := e.Get(ctx, spiffeIdNamespacedName, existing); err != nil {
 				if !errors.IsNotFound(err) {
 					e.c.Log.WithFields(logrus.Fields{
-						"name": spiffeidname,
+						"name": spiffeIdName,
 					}).WithError(err).Error("Failed to get SpiffeID CRD")
 					return ctrl.Result{}, err
 				}
 				continue
 			}
+
+			// Add service as DNS name if it doesn't already exist
 			dnsNameAdded := false
 			retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := e.Get(ctx, types.NamespacedName{Name: spiffeidname, Namespace: address.TargetRef.Namespace}, existing); err != nil {
+				if err := e.Get(ctx,spiffeIdNamespacedName, existing); err != nil {
 					e.c.Log.WithError(err).Error("Failed to get latest version of SpiffeID CRD")
 					return err
 				}
@@ -127,7 +141,7 @@ func (e *EndpointReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			})
 			if retryErr != nil {
 				e.c.Log.WithFields(logrus.Fields{
-					"name": spiffeidname,
+					"name": spiffeIdName,
 				}).Error(retryErr, "Unable to add DNS names in SpiffeID CRD")
 				return ctrl.Result{}, retryErr
 			}
@@ -141,7 +155,7 @@ func (e *EndpointReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				if e.svcNametoSpiffeID[svcName] == nil {
 					e.svcNametoSpiffeID[svcName] = make([]string, 0)
 				}
-				e.svcNametoSpiffeID[svcName] = append(e.svcNametoSpiffeID[svcName], spiffeidname)
+				e.svcNametoSpiffeID[svcName] = append(e.svcNametoSpiffeID[svcName], spiffeIdName)
 			}
 		}
 	}
@@ -151,7 +165,7 @@ func (e *EndpointReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 // deleteExternalResources remove the service name from the list of DNS Names when the service is removed
 func (e *EndpointReconciler) deleteExternalResources(ctx context.Context, namespacedName types.NamespacedName) error {
-	svcName := namespacedName.Name + "." + namespacedName.Namespace + ".svc"
+	svcName := getServiceDNSName(namespacedName)
 
 	for _, spiffeidname := range e.svcNametoSpiffeID[svcName] {
 		existing := &spiffeidv1beta1.SpiffeID{}
@@ -190,4 +204,8 @@ func (e *EndpointReconciler) deleteExternalResources(ctx context.Context, namesp
 		}
 	}
 	return nil
+}
+
+func getServiceDNSName(namespacedName types.NamespacedName) string {
+	return namespacedName.Name + "." + namespacedName.Namespace + ".svc"
 }

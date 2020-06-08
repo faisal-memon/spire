@@ -168,28 +168,28 @@ func (r *SpiffeIDReconciler) ensureDeleted(ctx context.Context, entryId string) 
 func (r *SpiffeIDReconciler) updateOrCreateSpiffeID(ctx context.Context, instance *spiffeidv1beta1.SpiffeID) (string, error) {
 	spiffeId := instance.Spec.SpiffeId
 	selectors := toCommonSelector(instance.Spec.Selector)
-	commonRegistrationEntry :=  &common.RegistrationEntry{
+	entry :=  &common.RegistrationEntry{
 		Selectors: selectors,
 		ParentId:  *r.myId,
 		SpiffeId:  spiffeId,
 		DnsNames:  instance.Spec.DnsNames,
 	}
 
-	createEntryIfNotExistsResponse, err := r.c.R.CreateEntryIfNotExists(ctx, commonRegistrationEntry)
+	response, err := r.c.R.CreateEntryIfNotExists(ctx, entry)
 	if err != nil {
 		r.c.Log.WithError(err).Error("Failed to create registration entry")
 		return "", err
 	}
 
-	entryId := createEntryIfNotExistsResponse.Entry.EntryId
-	if createEntryIfNotExistsResponse.Preexisting {
-		existing := createEntryIfNotExistsResponse.Entry
+	entryId := response.Entry.EntryId
+	if response.Preexisting {
+		existing := response.Entry
 		if !equalStringSlice(existing.DnsNames, instance.Spec.DnsNames) {
 			r.c.Log.Info("Updating Spire Entry")
 
-			commonRegistrationEntry.EntryId = entryId
+			entry.EntryId = entryId
 			_, err := r.c.R.UpdateEntry(ctx, &registration.UpdateEntryRequest{
-				Entry: commonRegistrationEntry,
+				Entry: entry,
 			})
 			if err != nil {
 				r.c.Log.WithError(err).Error("Unable to update SpiffeID CRD with new DNS names")

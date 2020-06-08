@@ -91,6 +91,7 @@ func selectorsField(selectors []*common.Selector) string {
 	return buf.String()
 }
 
+// Helper functions to for string operations.
 func equalStringSlice(x, y []string) bool {
 	if len(x) != len(y) {
 		return false
@@ -105,7 +106,6 @@ func equalStringSlice(x, y []string) bool {
 	return true
 }
 
-// Helper functions to check and remove string from a slice of strings.
 func containsString(slice []string, s string) bool {
 	for _, item := range slice {
 		if item == s {

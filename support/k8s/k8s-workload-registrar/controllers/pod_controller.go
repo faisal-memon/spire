@@ -200,7 +200,11 @@ func (r *PodReconciler) createSpiffeId(ctx context.Context, podName string, spif
 		spiffeId.ObjectMeta.Name = podName + "-" + computeHash(&spiffeId.Spec, &collisionCount)
 		err := r.Create(ctx, spiffeId)
 		if errors.IsAlreadyExists(err) {
-			r.Get(ctx, types.NamespacedName{Name: spiffeId.ObjectMeta.Name, Namespace: spiffeId.ObjectMeta.Namespace}, &existing)
+			spiffeIdNamespacedName := types.NamespacedName{
+				Name: spiffeId.ObjectMeta.Name,
+				Namespace: spiffeId.ObjectMeta.Namespace,
+			}
+			r.Get(ctx, spiffeIdNamespacedName, &existing)
 			if spiffeId.Spec.Selector.PodUid != existing.Spec.Selector.PodUid {
 				collisionCount++
 				continue
