@@ -48,7 +48,7 @@ type SpiffeIDReconcilerConfig struct {
 type SpiffeIDReconciler struct {
 	client.Client
 	c                  SpiffeIDReconcilerConfig
-	myId               *string
+	myId               string
 	spiffeIDCollection map[string]string
 }
 
@@ -72,11 +72,10 @@ func NewSpiffeIDReconciler(config SpiffeIDReconcilerConfig) (*SpiffeIDReconciler
 
 // Initialize ensures there is a node registration entry for PSAT nodes in the cluster.
 func (r *SpiffeIDReconciler) Initialize(ctx context.Context) error {
-	nodeID := r.nodeID()
-	r.myId = &nodeID
+	r.myId = r.nodeID()
 	return r.createEntry(ctx, &common.RegistrationEntry{
 		ParentId: idutil.ServerID(r.c.TrustDomain),
-		SpiffeId: nodeID,
+		SpiffeId: r.myId,
 		Selectors: []*common.Selector{
 			{Type: "k8s_psat", Value: fmt.Sprintf("cluster:%s", r.c.Cluster)},
 		},
@@ -170,7 +169,7 @@ func (r *SpiffeIDReconciler) updateOrCreateSpiffeID(ctx context.Context, instanc
 	selectors := toCommonSelector(instance.Spec.Selector)
 	entry := &common.RegistrationEntry{
 		Selectors: selectors,
-		ParentId:  *r.myId,
+		ParentId:  r.myId,
 		SpiffeId:  spiffeId,
 		DnsNames:  instance.Spec.DnsNames,
 	}
