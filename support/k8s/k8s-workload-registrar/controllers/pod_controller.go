@@ -56,10 +56,10 @@ type PodReconcilerConfig struct {
 // PodReconciler holds the runtime configuration and state of this controller
 type PodReconciler struct {
 	client.Client
-	c              PodReconcilerConfig
-	scheme         *runtime.Scheme
-	mode           PodReconcilerMode
-	value          string
+	c      PodReconcilerConfig
+	scheme *runtime.Scheme
+	mode   PodReconcilerMode
+	value  string
 }
 
 // NewPodReconciler creates a new PodReconciler object
@@ -75,7 +75,7 @@ func NewPodReconciler(config PodReconcilerConfig) (*PodReconciler, error) {
 		value = config.PodAnnotation
 	}
 
-	r := &PodReconciler {
+	r := &PodReconciler{
 		Client: config.Mgr.GetClient(),
 		c:      config,
 		mode:   mode,
@@ -136,7 +136,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	spiffeId := &spiffeidv1beta1.SpiffeID{
 		ObjectMeta: v1.ObjectMeta{
-			Namespace:   pod.Namespace,
+			Namespace: pod.Namespace,
 		},
 		Spec: spiffeidv1beta1.SpiffeIDSpec{
 			SpiffeId: spiffeIdUri,
@@ -195,7 +195,7 @@ func (r *PodReconciler) createSpiffeId(ctx context.Context, podName string, spif
 		err := r.Create(ctx, spiffeId)
 		if errors.IsAlreadyExists(err) {
 			spiffeIdNamespacedName := types.NamespacedName{
-				Name: spiffeId.ObjectMeta.Name,
+				Name:      spiffeId.ObjectMeta.Name,
 				Namespace: spiffeId.ObjectMeta.Namespace,
 			}
 			r.Get(ctx, spiffeIdNamespacedName, &existing)

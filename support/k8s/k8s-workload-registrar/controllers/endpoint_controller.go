@@ -31,21 +31,21 @@ import (
 
 // EndpointReconcilerConfig holds the config passed in when creating the reconciler
 type EndpointReconcilerConfig struct {
-	Log           logrus.FieldLogger
-	Mgr           ctrl.Manager
+	Log                logrus.FieldLogger
+	Mgr                ctrl.Manager
 	DisabledNamespaces []string
 }
 
 // EndpointReconciler holds the runtime configuration and state of this controller
 type EndpointReconciler struct {
 	client.Client
-	c                  EndpointReconcilerConfig
-	svcNametoSpiffeID  map[string][]string
+	c                 EndpointReconcilerConfig
+	svcNametoSpiffeID map[string][]string
 }
 
 // NewEndpointReconciler creates a new EndpointReconciler object
 func NewEndpointReconciler(config EndpointReconcilerConfig) (*EndpointReconciler, error) {
-	r := &EndpointReconciler {
+	r := &EndpointReconciler{
 		Client:            config.Mgr.GetClient(),
 		c:                 config,
 		svcNametoSpiffeID: make(map[string][]string),
@@ -95,7 +95,7 @@ func (e *EndpointReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			// Retrieve pod object for this endpoint
 			pod := corev1.Pod{}
 			podNamespacedName := types.NamespacedName{
-				Name: address.TargetRef.Name,
+				Name:      address.TargetRef.Name,
 				Namespace: address.TargetRef.Namespace,
 			}
 			if err := e.Get(ctx, podNamespacedName, &pod); err != nil {
@@ -107,7 +107,7 @@ func (e *EndpointReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			existing := &spiffeidv1beta1.SpiffeID{}
 			spiffeIdName := pod.ObjectMeta.Labels["spiffe.io/spiffeid"]
 			spiffeIdNamespacedName := types.NamespacedName{
-				Name: spiffeIdName,
+				Name:      spiffeIdName,
 				Namespace: address.TargetRef.Namespace,
 			}
 			if err := e.Get(ctx, spiffeIdNamespacedName, existing); err != nil {
@@ -123,7 +123,7 @@ func (e *EndpointReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			// Add service as DNS name if it doesn't already exist
 			dnsNameAdded := false
 			retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := e.Get(ctx,spiffeIdNamespacedName, existing); err != nil {
+				if err := e.Get(ctx, spiffeIdNamespacedName, existing); err != nil {
 					e.c.Log.WithError(err).Error("Failed to get latest version of SpiffeID CRD")
 					return err
 				}
@@ -149,7 +149,7 @@ func (e *EndpointReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			if dnsNameAdded {
 				e.c.Log.WithFields(logrus.Fields{
 					"service": svcName,
-					"pod": pod.ObjectMeta.Name,
+					"pod":     pod.ObjectMeta.Name,
 				}).Info("Added DNS names to CRD")
 
 				if e.svcNametoSpiffeID[svcName] == nil {

@@ -37,11 +37,11 @@ import (
 
 // SpiffeIDReconcilerConfig holds the config passed in when creating the reconciler
 type SpiffeIDReconcilerConfig struct {
-	Log          logrus.FieldLogger
-	R            registration.RegistrationClient
-	TrustDomain  string
-	Cluster      string
-	Mgr          ctrl.Manager
+	Log         logrus.FieldLogger
+	R           registration.RegistrationClient
+	TrustDomain string
+	Cluster     string
+	Mgr         ctrl.Manager
 }
 
 // SpiffeIDReconciler holds the runtime configuration and state of this controller
@@ -54,10 +54,10 @@ type SpiffeIDReconciler struct {
 
 // NewSpiffeIDReconciler creates a new SpiffeIDReconciler object
 func NewSpiffeIDReconciler(config SpiffeIDReconcilerConfig) (*SpiffeIDReconciler, error) {
-	r := &SpiffeIDReconciler {
-		Client: config.Mgr.GetClient(),
-		c: config,
-		spiffeIDCollection:  make(map[string]string),
+	r := &SpiffeIDReconciler{
+		Client:             config.Mgr.GetClient(),
+		c:                  config,
+		spiffeIDCollection: make(map[string]string),
 	}
 
 	err := ctrl.NewControllerManagedBy(r.c.Mgr).
@@ -168,7 +168,7 @@ func (r *SpiffeIDReconciler) ensureDeleted(ctx context.Context, entryId string) 
 func (r *SpiffeIDReconciler) updateOrCreateSpiffeID(ctx context.Context, instance *spiffeidv1beta1.SpiffeID) (string, error) {
 	spiffeId := instance.Spec.SpiffeId
 	selectors := toCommonSelector(instance.Spec.Selector)
-	entry :=  &common.RegistrationEntry{
+	entry := &common.RegistrationEntry{
 		Selectors: selectors,
 		ParentId:  *r.myId,
 		SpiffeId:  spiffeId,
@@ -198,7 +198,7 @@ func (r *SpiffeIDReconciler) updateOrCreateSpiffeID(ctx context.Context, instanc
 		}
 	} else {
 		r.c.Log.WithFields(logrus.Fields{
-			"entryID": entryId,
+			"entryID":  entryId,
 			"spiffeID": spiffeId,
 		}).Info("Created entry")
 		r.spiffeIDCollection[instance.ObjectMeta.Namespace+"/"+instance.ObjectMeta.Name] = entryId
