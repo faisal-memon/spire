@@ -33,6 +33,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"k8s.io/utils/pointer"
 )
 
 type PodReconcilerMode int32
@@ -156,6 +157,12 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}).WithError(err).Error("Failed to set pod as owner of new SpiffeID CRD")
 		return ctrl.Result{}, err
 	}
+	ownerRef := v1.GetControllerOfNoCopy(spiffeId)
+	if ownerRef == nil {
+		r.c.Log.Error("Error updating owner reference")
+		return ctrl.Result{}, err
+	}
+	ownerRef.BlockOwnerDeletion = pointer.BoolPtr(false)
 
 	err = r.createSpiffeId(ctx, pod.ObjectMeta.Name, spiffeId)
 	if err != nil {

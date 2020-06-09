@@ -49,7 +49,6 @@ type SpiffeIDReconciler struct {
 	client.Client
 	c                  SpiffeIDReconcilerConfig
 	myId               string
-	spiffeIDCollection map[string]string
 }
 
 // NewSpiffeIDReconciler creates a new SpiffeIDReconciler object
@@ -57,7 +56,6 @@ func NewSpiffeIDReconciler(config SpiffeIDReconcilerConfig) (*SpiffeIDReconciler
 	r := &SpiffeIDReconciler{
 		Client:             config.Mgr.GetClient(),
 		c:                  config,
-		spiffeIDCollection: make(map[string]string),
 	}
 
 	err := ctrl.NewControllerManagedBy(r.c.Mgr).
@@ -93,19 +91,37 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			return ctrl.Result{}, err
 		}
 
-		// Delete event
-		if err := r.ensureDeleted(ctx, r.spiffeIDCollection[req.NamespacedName.String()]); err != nil {
-			r.c.Log.WithFields(logrus.Fields{
-				"entryid": r.spiffeIDCollection[req.NamespacedName.String()],
-			}).WithError(err).Error("Unable to delete registration entry")
-			return ctrl.Result{}, err
-		}
-		delete(r.spiffeIDCollection, req.NamespacedName.String())
-		r.c.Log.WithFields(logrus.Fields{
-			"entry": req.NamespacedName.String(),
-		}).Info("Finalized entry")
-
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	myFinalizerName := "finalizers.spiffeid.spiffe.io"
+	if spiffeID.ObjectMeta.DeletionTimestamp.IsZero() {
+		if !containsString(spiffeID.GetFinalizers(), myFinalizerName) {
+			spiffeID.SetFinalizers(append(spiffeID.GetFinalizers(), myFinalizerName))
+			if err := r.Update(ctx, &spiffeID); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	} else {
+		if containsString(spiffeID.GetFinalizers(), myFinalizerName) {
+			// our finalizer is present, so lets handle any external dependency
+			if err := r.ensureDeleted(ctx, *spiffeID.Status.EntryId); err != nil {
+				r.c.Log.WithFields(logrus.Fields{
+					"entryid":  *spiffeID.Status.EntryId,
+				}).WithError(err).Error("unable to delete spire entry")
+				return ctrl.Result{}, err
+			}
+
+			// remove our finalizer from the list and update it.
+			spiffeID.SetFinalizers(removeStringIf(spiffeID.GetFinalizers(), myFinalizerName))
+			if err := r.Update(ctx, &spiffeID); err != nil {
+				return ctrl.Result{}, err
+			}
+			r.c.Log.WithFields(logrus.Fields{
+				"entry": spiffeID.Name,
+			}).Info("Finalized entry")
+		}
+		return ctrl.Result{}, nil
 	}
 
 	entryId, err := r.updateOrCreateSpiffeID(ctx, &spiffeID)
@@ -200,7 +216,6 @@ func (r *SpiffeIDReconciler) updateOrCreateSpiffeID(ctx context.Context, instanc
 			"entryID":  entryId,
 			"spiffeID": spiffeId,
 		}).Info("Created entry")
-		r.spiffeIDCollection[instance.ObjectMeta.Namespace+"/"+instance.ObjectMeta.Name] = entryId
 	}
 
 	return entryId, nil

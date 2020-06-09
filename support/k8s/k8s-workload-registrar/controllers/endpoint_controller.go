@@ -169,7 +169,11 @@ func (e *EndpointReconciler) deleteExternalResources(ctx context.Context, namesp
 
 	for _, spiffeidname := range e.svcNametoSpiffeID[svcName] {
 		existing := &spiffeidv1beta1.SpiffeID{}
-		if err := e.Get(ctx, types.NamespacedName{Name: spiffeidname, Namespace: namespacedName.Namespace}, existing); err != nil {
+		namespacedName := types.NamespacedName{
+			Name: spiffeidname,
+			Namespace: namespacedName.Namespace,
+		}
+		if err := e.Get(ctx, namespacedName, existing); err != nil {
 			if !errors.IsNotFound(err) {
 				e.c.Log.WithFields(logrus.Fields{
 					"name": spiffeidname,
