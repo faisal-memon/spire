@@ -157,7 +157,10 @@ func (e *EndpointReconciler) deleteExternalResources(ctx context.Context, namesp
 	svcName := getServiceDNSName(namespacedName)
 	spiffeIDList := spiffeidv1beta1.SpiffeIDList{}
 
-	if err := e.List(ctx, &spiffeIDList); err != nil {
+	err := e.List(ctx, &spiffeIDList, &client.ListOptions{
+		Namespace: namespacedName.Namespace,
+	})
+	if err != nil {
 		if !errors.IsNotFound(err) {
 			e.c.Log.WithFields(logrus.Fields{
 				"service": svcName,
