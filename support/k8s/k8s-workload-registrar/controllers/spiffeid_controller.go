@@ -200,7 +200,7 @@ func (r *SpiffeIDReconciler) updateOrCreateSpiffeID(ctx context.Context, instanc
 	if response.Preexisting {
 		existing := response.Entry
 		if !equalStringSlice(existing.DnsNames, instance.Spec.DnsNames) {
-			r.c.Log.Info("Updating Spire Entry")
+			r.c.Log.Info("Updating Spire Entry DNS names")
 
 			entry.EntryId = entryId
 			_, err := r.c.R.UpdateEntry(ctx, &registration.UpdateEntryRequest{
