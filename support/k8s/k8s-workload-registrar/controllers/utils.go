@@ -16,7 +16,7 @@ limitations under the License.
 package controllers
 
 import (
-	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"hash"
@@ -24,7 +24,9 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	spiffeidv1beta1 "github.com/spiffe/spire/api/spiffecrd/v1beta1"
-	"github.com/spiffe/spire/proto/spire/common"
+	"github.com/spiffe/spire/proto/spire/api/registration"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/rand"
@@ -78,20 +80,27 @@ func computeHash(template *spiffeidv1beta1.SpiffeIDSpec, collisionCount *int32) 
 	return rand.SafeEncodeString(fmt.Sprint(podTemplateSpecHasher.Sum32()))
 }
 
-func selectorsField(selectors []*common.Selector) string {
-	var buf bytes.Buffer
-	for i, selector := range selectors {
-		if i > 0 {
-			buf.WriteString(",")
+// deleteRegistrationEntry deletes an entry on the SPIRE Server
+func deleteRegistrationEntry(ctx context.Context, R registration.RegistrationClient, entryID string) error {
+	_, err := R.DeleteEntry(ctx, &registration.RegistrationEntryID{Id: entryID})
+	switch status.Code(err) {
+	case codes.OK, codes.NotFound:
+		return nil
+	case codes.Internal:
+		// Spire server currently returns a 500 if delete fails due to the entry not existing.
+		// We work around it by attempting to fetch the entry, and if it's not found then all is good.
+		_, err := R.FetchEntry(ctx, &registration.RegistrationEntryID{Id: entryID})
+		if status.Code(err) == codes.NotFound {
+			return nil
 		}
-		buf.WriteString(selector.Type)
-		buf.WriteString(":")
-		buf.WriteString(selector.Value)
+
+		return err
 	}
-	return buf.String()
+
+	return nil
 }
 
-// Helper functions to for string operations.
+// Helper functions for string operations.
 func equalStringSlice(x, y []string) bool {
 	if len(x) != len(y) {
 		return false

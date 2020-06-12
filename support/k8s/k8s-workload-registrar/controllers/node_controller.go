@@ -28,7 +28,6 @@ import (
 	"github.com/spiffe/spire/proto/spire/common"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -68,13 +67,13 @@ func NewNodeReconciler(config NodeReconcilerConfig) (*NodeReconciler, error) {
 // Reconcile steps through the endpoints for each service and adds the name of the service as
 // a DNS name to the SPIFFE ID CRD
 func (n *NodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	var node corev1.Node
+	node := corev1.Node{}
 	ctx := context.Background()
 
 	if err := n.Get(ctx, req.NamespacedName, &node); err != nil {
 		if errors.IsNotFound(err) {
 			// Delete event
-			if err := n.deleteExternalResources(ctx, req.NamespacedName); err != nil {
+			if err := n.deleteNodeEntry(ctx, node.ObjectMeta.Name); err != nil {
 				return ctrl.Result{}, err
 			}
 
@@ -84,8 +83,6 @@ func (n *NodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		n.c.Log.WithError(err).Error("Unable to fetch Node")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-
-	n.c.Log.Debug(node.ObjectMeta.Name)
 
 	entry := &common.RegistrationEntry{
 		ParentId: idutil.ServerID(n.c.TrustDomain),
@@ -110,6 +107,30 @@ func (n *NodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
+// deleteNodeEntry remove the service name from the list of DNS Names when the service is removed
+func (n *NodeReconciler) deleteNodeEntry(ctx context.Context, nodeName string) error {
+	entries, err := n.c.R.ListByParentID(ctx, &registration.ParentID{
+		Id: idutil.ServerID(n.c.TrustDomain),
+	})
+	if err != nil {
+		return err
+	}
+
+	entryID := ""
+	for _, entry := range entries.Entries {
+		if entry.SpiffeId == n.nodeID(nodeName) {
+			entryID = entry.EntryId
+		}
+	}
+
+	// Entry already deleted
+	if entryID == "" {
+		return nil
+	}
+
+	return deleteRegistrationEntry(ctx, n.c.R, entryID)
+}
+
 func (n *NodeReconciler) makeID(pathFmt string, pathArgs ...interface{}) string {
 	id := url.URL{
 		Scheme: "spiffe",
@@ -121,9 +142,4 @@ func (n *NodeReconciler) makeID(pathFmt string, pathArgs ...interface{}) string 
 
 func (n *NodeReconciler) nodeID(nodeName string) string {
 	return n.makeID("k8s-workload-registrar/%s/node/%s", n.c.Cluster, nodeName)
-}
-
-// deleteExternalResources remove the service name from the list of DNS Names when the service is removed
-func (n *NodeReconciler) deleteExternalResources(ctx context.Context, namespacedName types.NamespacedName) error {
-	return nil
 }

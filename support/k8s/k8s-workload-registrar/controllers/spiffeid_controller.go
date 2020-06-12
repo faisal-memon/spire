@@ -22,8 +22,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/spire/proto/spire/api/registration"
 	"github.com/spiffe/spire/proto/spire/common"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -66,8 +64,8 @@ func NewSpiffeIDReconciler(config SpiffeIDReconcilerConfig) (*SpiffeIDReconciler
 
 // Reconcile ensures the SPIRE Server entry matches the corresponding CRD
 func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
 	spiffeID := spiffeidv1beta1.SpiffeID{}
+	ctx := context.Background()
 
 	if err := r.Get(ctx, req.NamespacedName, &spiffeID); err != nil {
 		if !k8serrors.IsNotFound(err) {
@@ -90,12 +88,11 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	} else {
 		// Delete event
 		if containsString(spiffeID.GetFinalizers(), myFinalizerName) {
-			// Our finalizer is present, so lets handle any external dependency
 			if err := r.deleteSpiffeID(ctx, &spiffeID); err != nil {
 				r.c.Log.WithFields(logrus.Fields{
 					"Name":      spiffeID.Name,
 					"Namespace": spiffeID.Namespace,
-					"Entry ID":  *spiffeID.Status.EntryId,
+					"EntryID":   *spiffeID.Status.EntryId,
 				}).WithError(err).Error("Unable to delete registration entry")
 				return ctrl.Result{}, err
 			}
@@ -108,7 +105,7 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			r.c.Log.WithFields(logrus.Fields{
 				"Name":      spiffeID.Name,
 				"Namespace": spiffeID.Namespace,
-			}).Info("Finalized SPIFFE ID")
+			}).Info("Finalized SPIFFE ID Resource")
 		}
 		return ctrl.Result{}, nil
 	}
@@ -122,7 +119,7 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	if !preexisting {
+	if !preexisting || spiffeID.Status.EntryId == nil {
 		spiffeID.Status.EntryId = &entryID
 		if err := r.Status().Update(ctx, &spiffeID); err != nil {
 			r.c.Log.WithFields(logrus.Fields{
@@ -134,34 +131,6 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	return ctrl.Result{}, nil
-}
-
-// deleteSpiffeID deletes the specified entry on the SPIRE Server
-func (r *SpiffeIDReconciler) deleteSpiffeID(ctx context.Context, spiffeID *spiffeidv1beta1.SpiffeID) error {
-	entryId := spiffeID.Status.EntryId
-	if _, err := r.c.R.DeleteEntry(ctx, &registration.RegistrationEntryID{Id: *entryId}); err != nil {
-		if status.Code(err) != codes.NotFound {
-			if status.Code(err) == codes.Internal {
-				// Spire server currently returns a 500 if delete fails due to the entry not existing.
-				// We work around it by attempting to fetch the entry, and if it's not found then all is good.
-				if _, err := r.c.R.FetchEntry(ctx, &registration.RegistrationEntryID{Id: *entryId}); err != nil {
-					if status.Code(err) == codes.NotFound {
-						r.c.Log.WithFields(logrus.Fields{
-							"entry": entryId,
-						}).Info("Entry already deleted")
-						return nil
-					}
-				}
-			}
-			return err
-		}
-	}
-	r.c.Log.WithFields(logrus.Fields{
-		"Entry ID":  entryId,
-		"SPIFFE ID": spiffeID.Spec.SpiffeId,
-		"Parent ID": spiffeID.Spec.ParentId,
-	}).Info("Deleted entry")
-	return nil
 }
 
 // updateOrCreateSpiffeID attempts to create a new entry. if the entry already exists, it updates it.
@@ -183,9 +152,8 @@ func (r *SpiffeIDReconciler) updateOrCreateSpiffeID(ctx context.Context, spiffeI
 		existing := response.Entry
 		if !equalStringSlice(existing.DnsNames, spiffeID.Spec.DnsNames) {
 			r.c.Log.WithFields(logrus.Fields{
-				"Entry ID":  entryId,
-				"SPIFFE ID": spiffeID.Spec.SpiffeId,
-				"Parent ID": spiffeID.Spec.ParentId,
+				"EntryID":  entryId,
+				"SpiffeID": spiffeID.Spec.SpiffeId,
 			}).Info("Updated entry DNS names")
 
 			entry.EntryId = entryId
@@ -198,13 +166,27 @@ func (r *SpiffeIDReconciler) updateOrCreateSpiffeID(ctx context.Context, spiffeI
 		}
 	} else {
 		r.c.Log.WithFields(logrus.Fields{
-			"Entry ID":  entryId,
-			"SPIFFE ID": spiffeID.Spec.SpiffeId,
-			"Parent ID": spiffeID.Spec.ParentId,
+			"EntryID":  entryId,
+			"SpiffeID": spiffeID.Spec.SpiffeId,
 		}).Info("Created entry")
 	}
 
 	return entryId, response.Preexisting, nil
+}
+
+// deleteSpiffeID deletes the specified entry on the SPIRE Server
+func (r *SpiffeIDReconciler) deleteSpiffeID(ctx context.Context, spiffeID *spiffeidv1beta1.SpiffeID) error {
+	err := deleteRegistrationEntry(ctx, r.c.R, *spiffeID.Status.EntryId)
+	if err != nil {
+		return err
+	}
+
+	r.c.Log.WithFields(logrus.Fields{
+		"EntryID":  spiffeID.Status.EntryId,
+		"SpiffeID": spiffeID.Spec.SpiffeId,
+	}).Info("Deleted entry")
+
+	return nil
 }
 
 // toCommonSelector converts the selectors from the CRD to the common.Selector format
