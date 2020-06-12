@@ -36,14 +36,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-type PodReconcilerMode int32
-
-const (
-	PodReconcilerModeServiceAccount PodReconcilerMode = iota
-	PodReconcilerModeLabel
-	PodReconcilerModeAnnotation
-)
-
 // PodReconcilerConfig holds the config passed in when creating the reconciler
 type PodReconcilerConfig struct {
 	Log                logrus.FieldLogger
@@ -60,28 +52,13 @@ type PodReconciler struct {
 	client.Client
 	c      PodReconcilerConfig
 	scheme *runtime.Scheme
-	mode   PodReconcilerMode
-	value  string
 }
 
 // NewPodReconciler creates a new PodReconciler object
 func NewPodReconciler(config PodReconcilerConfig) (*PodReconciler, error) {
-	mode := PodReconcilerModeServiceAccount
-	value := ""
-	if len(config.PodLabel) > 0 {
-		mode = PodReconcilerModeLabel
-		value = config.PodLabel
-	}
-	if len(config.PodAnnotation) > 0 {
-		mode = PodReconcilerModeAnnotation
-		value = config.PodAnnotation
-	}
-
 	r := &PodReconciler{
 		Client: config.Mgr.GetClient(),
 		c:      config,
-		mode:   mode,
-		value:  value,
 		scheme: config.Mgr.GetScheme(),
 	}
 
@@ -97,7 +74,7 @@ func NewPodReconciler(config PodReconcilerConfig) (*PodReconciler, error) {
 
 // Reconcile creates a new SPIFFE ID when pods are created
 func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	var pod corev1.Pod
+	pod := corev1.Pod{}
 	ctx := context.Background()
 
 	if containsString(r.c.DisabledNamespaces, req.NamespacedName.Namespace) {
@@ -106,13 +83,10 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if err := r.Get(ctx, req.NamespacedName, &pod); err != nil {
 		if !errors.IsNotFound(err) {
-			r.c.Log.WithError(err).Error("Unable to fetch Pod")
+			r.c.Log.WithError(err).Error("Unable to get Pod")
 			return ctrl.Result{}, err
 		}
 
-		// we'll ignore not-found errors, since they can't be fixed by an immediate
-		// requeue (we'll need to wait for a new notification), and we can get them
-		// on deleted requests.
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -121,68 +95,13 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	parentIdUri := r.getParentId(pod.Spec.NodeName)
-	spiffeIdUri := ""
-	switch r.mode {
-	case PodReconcilerModeServiceAccount:
-		spiffeIdUri = r.makeID("ns/%s/sa/%s", req.Namespace, pod.Spec.ServiceAccountName)
-	case PodReconcilerModeLabel:
-		if val, ok := pod.GetLabels()[r.value]; ok {
-			spiffeIdUri = r.makeID("%s", val)
-		} else {
-			// No relevant label
-			return ctrl.Result{}, nil
-		}
-	case PodReconcilerModeAnnotation:
-		if val, ok := pod.GetAnnotations()[r.value]; ok {
-			spiffeIdUri = r.makeID("%s", val)
-		} else {
-			// No relevant annotation
-			return ctrl.Result{}, nil
-		}
-	}
-
-	spiffeId := &spiffeidv1beta1.SpiffeID{
-		ObjectMeta: v1.ObjectMeta{
-			Namespace: pod.Namespace,
-		},
-		Spec: spiffeidv1beta1.SpiffeIDSpec{
-			ParentId: parentIdUri,
-			SpiffeId: spiffeIdUri,
-			DnsNames: []string{pod.Name}, // Set pod name as first DNS name
-			Selector: spiffeidv1beta1.Selector{
-				PodUid:    pod.GetUID(),
-				Namespace: pod.Namespace,
-				NodeName:  pod.Spec.NodeName,
-			},
-		},
-	}
-
-	// Set pod as owner of new SPIFFE ID
-	err := controllerutil.SetControllerReference(&pod, spiffeId, r.scheme)
+	spiffeID, err := r.getOrCreatePodEntry(ctx, &pod)
 	if err != nil {
-		r.c.Log.WithFields(logrus.Fields{
-			"Name":      spiffeId.Name,
-			"Namespace": spiffeId.Namespace,
-		}).WithError(err).Error("Failed to set pod as owner of new SpiffeID CRD")
-		return ctrl.Result{}, err
-	}
-
-	// Make owner reference non-blocking, so pod can be deleted if registrar is down
-	ownerRef := v1.GetControllerOfNoCopy(spiffeId)
-	if ownerRef == nil {
-		r.c.Log.Error("Error updating owner reference")
-		return ctrl.Result{}, err
-	}
-	ownerRef.BlockOwnerDeletion = pointer.BoolPtr(false)
-
-	err = r.createSpiffeId(ctx, pod.ObjectMeta.Name, spiffeId)
-	if err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, nil
 	}
 
 	// Add label to pod with name of SPIFFE ID
-	if pod.ObjectMeta.Labels["spiffe.io/spiffeid"] != spiffeId.ObjectMeta.Name {
+	if pod.ObjectMeta.Labels["spiffe.io/spiffeid"] != spiffeID.ObjectMeta.Name {
 		retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			// Retrieve the latest version of Pod before attempting update
 			// RetryOnConflict uses exponential backoff to avoid exhausting the apiserver
@@ -190,7 +109,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				r.c.Log.WithError(err).Error("Failed to get latest version of Pod")
 				return err
 			}
-			pod.ObjectMeta.Labels["spiffe.io/spiffeid"] = spiffeId.ObjectMeta.Name
+			pod.ObjectMeta.Labels["spiffe.io/spiffeid"] = spiffeID.ObjectMeta.Name
 
 			return r.Update(ctx, &pod)
 		})
@@ -202,6 +121,86 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// getOrCreatePodEntry attempts to create a new SpiffeID resource. if the entry already exists, it returns it.
+func (r *PodReconciler) getOrCreatePodEntry(ctx context.Context, pod *corev1.Pod) (*spiffeidv1beta1.SpiffeID, error) {
+	spiffeIDURI := r.podSpiffeID(pod)
+	// If we have no spiffe ID for the pod, do nothing
+	if spiffeIDURI == "" {
+		return nil, nil
+	}
+
+	spiffeID := &spiffeidv1beta1.SpiffeID{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: pod.Namespace,
+		},
+		Spec: spiffeidv1beta1.SpiffeIDSpec{
+			SpiffeId: spiffeIDURI,
+			ParentId: r.podParentID(pod.Spec.NodeName),
+			DnsNames: []string{pod.Name}, // Set pod name as first DNS name
+			Selector: spiffeidv1beta1.Selector{
+				PodUid:    pod.GetUID(),
+				Namespace: pod.Namespace,
+				NodeName:  pod.Spec.NodeName,
+			},
+		},
+	}
+	err := r.setOwnerRef(pod, spiffeID)
+	if err != nil {
+		return nil, err
+	}
+
+	err = r.createSpiffeId(ctx, pod.ObjectMeta.Name, spiffeID)
+	if err != nil {
+		return nil, err
+	}
+
+	return spiffeID, nil
+}
+
+// podSpiffeID returns the desired spiffe ID for the pod, or nil if it should be ignored
+func (r *PodReconciler) podSpiffeID(pod *corev1.Pod) string {
+	if r.c.PodLabel != "" {
+		// the controller has been configured with a pod label. if the pod
+		// has that label, use the value to construct the pod entry. otherwise
+		// ignore the pod altogether.
+		if labelValue, ok := pod.Labels[r.c.PodLabel]; ok {
+			return r.makeID("%s", labelValue)
+		}
+		return ""
+	}
+
+	if r.c.PodAnnotation != "" {
+		// the controller has been configured with a pod annotation. if the pod
+		// has that annotation, use the value to construct the pod entry. otherwise
+		// ignore the pod altogether.
+		if annotationValue, ok := pod.Annotations[r.c.PodAnnotation]; ok {
+			return r.makeID("%s", annotationValue)
+		}
+		return ""
+	}
+
+	// the controller has not been configured with a pod label or a pod annotation.
+	// create an entry based on the service account.
+	return r.makeID("ns/%s/sa/%s", pod.Namespace, pod.Spec.ServiceAccountName)
+}
+
+// setOwnerRef sets the pod as owner of new SPIFFE ID
+func (r *PodReconciler) setOwnerRef(pod *corev1.Pod, spiffeID *spiffeidv1beta1.SpiffeID) error {
+	err := controllerutil.SetControllerReference(pod, spiffeID, r.scheme)
+	if err != nil {
+		return err
+	}
+
+	// Make owner reference non-blocking, so pod can be deleted if registrar is down
+	ownerRef := v1.GetControllerOfNoCopy(spiffeID)
+	if ownerRef == nil {
+		return err
+	}
+	ownerRef.BlockOwnerDeletion = pointer.BoolPtr(false)
+
+	return nil
 }
 
 // createSpiffeId attempts to create the SPIFFE ID object. It uses the pod name appeneded with hash of the SPIFFE ID Spec
@@ -228,6 +227,10 @@ func (r *PodReconciler) createSpiffeId(ctx context.Context, podName string, spif
 
 }
 
+func (r *PodReconciler) podParentID(nodeName string) string {
+	return r.makeID("k8s-workload-registrar/%s/node/%s", r.c.Cluster, nodeName)
+}
+
 func (r *PodReconciler) makeID(pathFmt string, pathArgs ...interface{}) string {
 	id := url.URL{
 		Scheme: "spiffe",
@@ -235,7 +238,4 @@ func (r *PodReconciler) makeID(pathFmt string, pathArgs ...interface{}) string {
 		Path:   path.Clean(fmt.Sprintf(pathFmt, pathArgs...)),
 	}
 	return id.String()
-}
-func (r *PodReconciler) getParentId(nodeName string) string {
-	return r.makeID("k8s-workload-registrar/%s/node/%s", r.c.Cluster, nodeName)
 }

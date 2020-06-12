@@ -8,40 +8,38 @@ import (
 )
 
 const (
-	defaultLogLevel   = "info"
-	defaultAddr       = ":8443"
-	defaultCertPath   = "cert.pem"
-	defaultKeyPath    = "key.pem"
-	defaultCaCertPath = "cacert.pem"
+	defaultLogLevel      = "info"
+	defaultAddr          = ":8443"
+	defaultCertPath      = "cert.pem"
+	defaultKeyPath       = "key.pem"
+	defaultCaCertPath    = "cacert.pem"
 	defaultPodController = true
 	defaultAddSvcDNSName = true
 
-
-	modeCRD           = "crd"
-	modeWebhook       = "webhook"
-	defaultMode       = modeWebhook
+	modeCRD     = "crd"
+	modeWebhook = "webhook"
+	defaultMode = modeWebhook
 )
 
 type Config struct {
-	LogFormat                      string `hcl:"log_format"`
-	LogLevel                       string `hcl:"log_level"`
-	LogPath                        string `hcl:"log_path"`
-	Addr                           string `hcl:"addr"`
-	CertPath                       string `hcl:"cert_path"`
-	KeyPath                        string `hcl:"key_path"`
-	CaCertPath                     string `hcl:"cacert_path"`
-	InsecureSkipClientVerification bool   `hcl:"insecure_skip_client_verification"`
-	TrustDomain                    string `hcl:"trust_domain"`
-	ServerSocketPath               string `hcl:"server_socket_path"`
-	Cluster                        string `hcl:"cluster"`
-	PodLabel                       string `hcl:"pod_label"`
-	PodAnnotation                  string `hcl:"pod_annotation"`
+	LogFormat                      string   `hcl:"log_format"`
+	LogLevel                       string   `hcl:"log_level"`
+	LogPath                        string   `hcl:"log_path"`
+	Addr                           string   `hcl:"addr"`
+	CertPath                       string   `hcl:"cert_path"`
+	KeyPath                        string   `hcl:"key_path"`
+	CaCertPath                     string   `hcl:"cacert_path"`
+	InsecureSkipClientVerification bool     `hcl:"insecure_skip_client_verification"`
+	TrustDomain                    string   `hcl:"trust_domain"`
+	ServerSocketPath               string   `hcl:"server_socket_path"`
+	Cluster                        string   `hcl:"cluster"`
+	PodLabel                       string   `hcl:"pod_label"`
+	PodAnnotation                  string   `hcl:"pod_annotation"`
 	DisabledNamespaces             []string `hcl:"disabled_namespaces"`
-	Mode                           string `hcl:"mode"`
+	Mode                           string   `hcl:"mode"`
 
-	PodController                  bool   `hcl:"pod_controller"`
-	AddSvcDNSName                  bool   `hcl:"add_svc_dns_name"`
-
+	PodController bool `hcl:"pod_controller"`
+	AddSvcDNSName bool `hcl:"add_svc_dns_name"`
 }
 
 func LoadConfig(path string) (*Config, error) {

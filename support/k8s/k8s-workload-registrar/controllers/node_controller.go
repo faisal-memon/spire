@@ -116,6 +116,7 @@ func (n *NodeReconciler) deleteNodeEntry(ctx context.Context, nodeName string) e
 		return err
 	}
 
+	// Iterate through all node entries
 	entryID := ""
 	for _, entry := range entries.Entries {
 		if entry.SpiffeId == n.nodeID(nodeName) {
