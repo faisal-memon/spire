@@ -30,10 +30,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"k8s.io/utils/pointer"
 )
 
 type PodReconcilerMode int32
@@ -48,6 +48,7 @@ const (
 type PodReconcilerConfig struct {
 	Log                logrus.FieldLogger
 	Mgr                ctrl.Manager
+	Cluster            string
 	TrustDomain        string
 	PodLabel           string
 	PodAnnotation      string
@@ -115,6 +116,12 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	// Pod neeeds to be assigned a node before it can get a SPIFFE ID
+	if pod.Spec.NodeName == "" {
+		return ctrl.Result{}, nil
+	}
+
+	parentIdUri := r.getParentId(pod.Spec.NodeName)
 	spiffeIdUri := ""
 	switch r.mode {
 	case PodReconcilerModeServiceAccount:
@@ -140,11 +147,13 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			Namespace: pod.Namespace,
 		},
 		Spec: spiffeidv1beta1.SpiffeIDSpec{
+			ParentId: parentIdUri,
 			SpiffeId: spiffeIdUri,
 			DnsNames: []string{pod.Name}, // Set pod name as first DNS name
 			Selector: spiffeidv1beta1.Selector{
 				PodUid:    pod.GetUID(),
 				Namespace: pod.Namespace,
+				NodeName:  pod.Spec.NodeName,
 			},
 		},
 	}
@@ -153,10 +162,13 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	err := controllerutil.SetControllerReference(&pod, spiffeId, r.scheme)
 	if err != nil {
 		r.c.Log.WithFields(logrus.Fields{
-			"spiffe-id-crd-name": spiffeId.Name,
+			"Name":      spiffeId.Name,
+			"Namespace": spiffeId.Namespace,
 		}).WithError(err).Error("Failed to set pod as owner of new SpiffeID CRD")
 		return ctrl.Result{}, err
 	}
+
+	// Make owner reference non-blocking, so pod can be deleted if registrar is down
 	ownerRef := v1.GetControllerOfNoCopy(spiffeId)
 	if ownerRef == nil {
 		r.c.Log.Error("Error updating owner reference")
@@ -223,4 +235,7 @@ func (r *PodReconciler) makeID(pathFmt string, pathArgs ...interface{}) string {
 		Path:   path.Clean(fmt.Sprintf(pathFmt, pathArgs...)),
 	}
 	return id.String()
+}
+func (r *PodReconciler) getParentId(nodeName string) string {
+	return r.makeID("k8s-workload-registrar/%s/node/%s", r.c.Cluster, nodeName)
 }

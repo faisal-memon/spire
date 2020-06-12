@@ -39,14 +39,14 @@ type EndpointReconcilerConfig struct {
 // EndpointReconciler holds the runtime configuration and state of this controller
 type EndpointReconciler struct {
 	client.Client
-	c                 EndpointReconcilerConfig
+	c EndpointReconcilerConfig
 }
 
 // NewEndpointReconciler creates a new EndpointReconciler object
 func NewEndpointReconciler(config EndpointReconcilerConfig) (*EndpointReconciler, error) {
 	r := &EndpointReconciler{
-		Client:            config.Mgr.GetClient(),
-		c:                 config,
+		Client: config.Mgr.GetClient(),
+		c:      config,
 	}
 
 	err := ctrl.NewControllerManagedBy(config.Mgr).

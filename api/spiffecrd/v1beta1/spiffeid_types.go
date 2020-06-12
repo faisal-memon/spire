@@ -20,9 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 type Selector struct {
 	// Pod label name/value to match for this spiffe ID
 	PodLabel map[string]string `json:"podLabel,omitempty"`
@@ -38,15 +35,15 @@ type Selector struct {
 	ContainerImage string `json:"containerImage,omitempty"`
 	// ContainerName to match
 	ContainerName string `json:"containerName,omitempty"`
+	// NodeName to match
+	NodeName string `json:"NodeName,omitempty"`
 	// Arbitrary k8s selectors
 	Arbitrary []string `json:"arbitrary,omitempty"`
 }
 
 // SpiffeIDSpec defines the desired state of SpiffeID
 type SpiffeIDSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
+	ParentId string   `json:"parentId"`
 	SpiffeId string   `json:"spiffeId"`
 	Selector Selector `json:"selector"`
 	DnsNames []string `json:"dnsNames"`
@@ -54,17 +51,11 @@ type SpiffeIDSpec struct {
 
 // SpiffeIDStatus defines the observed state of SpiffeID
 type SpiffeIDStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 	EntryId *string `json:"entryId,omitempty"`
 	collisionCount *int32
 }
 
-// +kubebuilder:object:root=true
-// +kubebuilder:resource:scope=Namespaced
-// +kubebuilder:subresource:status
-
-// SpiffeID is the Schema for the spireentries API
+// SpiffeID is the Schema for the SpiffeIds API
 type SpiffeID struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -72,8 +63,6 @@ type SpiffeID struct {
 	Spec   SpiffeIDSpec   `json:"spec,omitempty"`
 	Status SpiffeIDStatus `json:"status,omitempty"`
 }
-
-// +kubebuilder:object:root=true
 
 // SpiffeIDList contains a list of SpiffeID
 type SpiffeIDList struct {

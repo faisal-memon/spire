@@ -76,12 +76,13 @@ func run(ctx context.Context, configPath string) error {
 		}
 		return server.Run(ctx)
 	case modeCRD:
+		log.Info("Initializing SPIFFE ID CRD Mode")
 		mgr, err := controllers.NewManager()
 		if err != nil {
 			return err
 		}
 
-		spiffeIDReconciler, err := controllers.NewSpiffeIDReconciler(controllers.SpiffeIDReconcilerConfig{
+		_, err = controllers.NewSpiffeIDReconciler(controllers.SpiffeIDReconcilerConfig{
 			Log:         log,
 			Mgr:         mgr,
 			R:           registration.NewRegistrationClient(serverConn),
@@ -92,16 +93,22 @@ func run(ctx context.Context, configPath string) error {
 			return err
 		}
 
-		log.Info("Initializing SPIFFE ID Reconciler")
-		if err := spiffeIDReconciler.Initialize(ctx); err != nil {
-			return err
-		}
-
 		if config.PodController {
+			_, err = controllers.NewNodeReconciler(controllers.NodeReconcilerConfig{
+				Log:         log,
+				Mgr:         mgr,
+				R:           registration.NewRegistrationClient(serverConn),
+				Cluster:     config.Cluster,
+				TrustDomain: config.TrustDomain,
+			})
+			if err != nil {
+				return err
+			}
 			_, err := controllers.NewPodReconciler(controllers.PodReconcilerConfig{
 				Log:                log,
 				Mgr:                mgr,
 				TrustDomain:        config.TrustDomain,
+				Cluster:            config.Cluster,
 				PodLabel:           config.PodLabel,
 				PodAnnotation:      config.PodAnnotation,
 				DisabledNamespaces: config.DisabledNamespaces,

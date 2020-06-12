@@ -25,11 +25,11 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	spiffeidv1beta1 "github.com/spiffe/spire/api/spiffecrd/v1beta1"
 	"github.com/spiffe/spire/proto/spire/common"
-	"k8s.io/apimachinery/pkg/util/rand"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/rand"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 func NewManager() (ctrl.Manager, error) {
