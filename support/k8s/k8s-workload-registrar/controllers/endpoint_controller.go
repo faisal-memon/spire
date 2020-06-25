@@ -138,14 +138,14 @@ func (e *EndpointReconciler) deleteExternalResources(ctx context.Context, namesp
 
 	for _, spiffeId := range spiffeIDList.Items {
 		e.c.Log.WithFields(logrus.Fields{
-			"spiffeId": spiffeId.ObjectMeta.Name,
+			"spiffeID": spiffeId.ObjectMeta.Name,
 		}).Info("Removing DNS names")
 
 		spiffeId.Spec.DnsNames = removeStringIf(spiffeId.Spec.DnsNames, svcName)
 
 		if err := e.Update(ctx, &spiffeId); err != nil {
 			e.c.Log.WithFields(logrus.Fields{
-				"spiffeId": spiffeId.ObjectMeta.Name,
+				"spiffeID": spiffeId.ObjectMeta.Name,
 			}).WithError(err).Error("Unable to delete DNS names in SpiffeID CRD")
 			return err
 		}

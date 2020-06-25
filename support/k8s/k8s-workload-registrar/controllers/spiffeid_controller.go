@@ -90,9 +90,9 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		if containsString(spiffeID.GetFinalizers(), myFinalizerName) {
 			if err := r.deleteSpiffeID(ctx, &spiffeID); err != nil {
 				r.c.Log.WithFields(logrus.Fields{
-					"Name":      spiffeID.Name,
-					"Namespace": spiffeID.Namespace,
-					"EntryID":   *spiffeID.Status.EntryId,
+					"name":      spiffeID.Name,
+					"namespace": spiffeID.Namespace,
+					"entryID":   *spiffeID.Status.EntryId,
 				}).WithError(err).Error("Unable to delete registration entry")
 				return ctrl.Result{}, err
 			}
@@ -103,8 +103,8 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				return ctrl.Result{}, err
 			}
 			r.c.Log.WithFields(logrus.Fields{
-				"Name":      spiffeID.Name,
-				"Namespace": spiffeID.Namespace,
+				"name":      spiffeID.Name,
+				"namespace": spiffeID.Namespace,
 			}).Info("Finalized SPIFFE ID Resource")
 		}
 		return ctrl.Result{}, nil
@@ -113,8 +113,8 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	entryID, preexisting, err := r.updateOrCreateSpiffeID(ctx, &spiffeID)
 	if err != nil {
 		r.c.Log.WithFields(logrus.Fields{
-			"Name":      spiffeID.Name,
-			"Namespace": spiffeID.Namespace,
+			"name":      spiffeID.Name,
+			"namespace": spiffeID.Namespace,
 		}).WithError(err).Error(err, "Unable to update or create registration entry")
 		return ctrl.Result{}, err
 	}
@@ -123,8 +123,8 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		spiffeID.Status.EntryId = &entryID
 		if err := r.Status().Update(ctx, &spiffeID); err != nil {
 			r.c.Log.WithFields(logrus.Fields{
-				"Name":      spiffeID.Name,
-				"Namespace": spiffeID.Namespace,
+				"name":      spiffeID.Name,
+				"namespace": spiffeID.Namespace,
 			}).WithError(err).Error("Unable to update SPIFFE ID status")
 			return ctrl.Result{}, err
 		}
@@ -152,8 +152,8 @@ func (r *SpiffeIDReconciler) updateOrCreateSpiffeID(ctx context.Context, spiffeI
 		existing := response.Entry
 		if !equalStringSlice(existing.DnsNames, spiffeID.Spec.DnsNames) {
 			r.c.Log.WithFields(logrus.Fields{
-				"EntryID":  entryId,
-				"SpiffeID": spiffeID.Spec.SpiffeId,
+				"entryID":  entryId,
+				"spiffeID": spiffeID.Spec.SpiffeId,
 			}).Info("Updated entry DNS names")
 
 			entry.EntryId = entryId
@@ -166,8 +166,8 @@ func (r *SpiffeIDReconciler) updateOrCreateSpiffeID(ctx context.Context, spiffeI
 		}
 	} else {
 		r.c.Log.WithFields(logrus.Fields{
-			"EntryID":  entryId,
-			"SpiffeID": spiffeID.Spec.SpiffeId,
+			"entryID":  entryId,
+			"spiffeID": spiffeID.Spec.SpiffeId,
 		}).Info("Created entry")
 	}
 
@@ -182,8 +182,8 @@ func (r *SpiffeIDReconciler) deleteSpiffeID(ctx context.Context, spiffeID *spiff
 	}
 
 	r.c.Log.WithFields(logrus.Fields{
-		"EntryID":  spiffeID.Status.EntryId,
-		"SpiffeID": spiffeID.Spec.SpiffeId,
+		"entryID":  spiffeID.Status.EntryId,
+		"spiffeID": spiffeID.Spec.SpiffeId,
 	}).Info("Deleted entry")
 
 	return nil
