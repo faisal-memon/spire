@@ -31,9 +31,10 @@ import (
 
 // EndpointReconcilerConfig holds the config passed in when creating the reconciler
 type EndpointReconcilerConfig struct {
+	Ctx                context.Context
+	DisabledNamespaces []string
 	Log                logrus.FieldLogger
 	Mgr                ctrl.Manager
-	DisabledNamespaces []string
 }
 
 // EndpointReconciler holds the runtime configuration and state of this controller
@@ -66,8 +67,8 @@ func (e *EndpointReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	var endpoints corev1.Endpoints
-	ctx := context.Background()
+	endpoints := corev1.Endpoints{}
+	ctx := e.c.Ctx
 
 	if err := e.Get(ctx, req.NamespacedName, &endpoints); err != nil {
 		if errors.IsNotFound(err) {

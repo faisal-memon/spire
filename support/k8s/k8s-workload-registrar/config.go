@@ -141,10 +141,11 @@ func (c *CRDConfig) Run(ctx context.Context) error {
 
 	log.Info("Initializing SPIFFE ID CRD Mode")
 	_, err = controllers.NewSpiffeIDReconciler(controllers.SpiffeIDReconcilerConfig{
+		Cluster:     c.Cluster,
+		Ctx:         ctx,
 		Log:         log,
 		Mgr:         mgr,
 		R:           registration.NewRegistrationClient(serverConn),
-		Cluster:     c.Cluster,
 		TrustDomain: c.TrustDomain,
 	})
 	if err != nil {
@@ -153,23 +154,25 @@ func (c *CRDConfig) Run(ctx context.Context) error {
 
 	if c.PodController {
 		_, err = controllers.NewNodeReconciler(controllers.NodeReconcilerConfig{
+			Cluster:     c.Cluster,
+			Ctx:         ctx,
 			Log:         log,
 			Mgr:         mgr,
 			R:           registration.NewRegistrationClient(serverConn),
-			Cluster:     c.Cluster,
 			TrustDomain: c.TrustDomain,
 		})
 		if err != nil {
 			return err
 		}
 		_, err := controllers.NewPodReconciler(controllers.PodReconcilerConfig{
+			Cluster:            c.Cluster,
+			Ctx:                ctx,
+			DisabledNamespaces: c.DisabledNamespaces,
 			Log:                log,
 			Mgr:                mgr,
-			TrustDomain:        c.TrustDomain,
-			Cluster:            c.Cluster,
 			PodLabel:           c.PodLabel,
 			PodAnnotation:      c.PodAnnotation,
-			DisabledNamespaces: c.DisabledNamespaces,
+			TrustDomain:        c.TrustDomain,
 		})
 		if err != nil {
 			return err
@@ -178,9 +181,10 @@ func (c *CRDConfig) Run(ctx context.Context) error {
 
 	if c.AddSvcDNSName {
 		_, err := controllers.NewEndpointReconciler(controllers.EndpointReconcilerConfig{
+			Ctx:                ctx,
+			DisabledNamespaces: c.DisabledNamespaces,
 			Log:                log,
 			Mgr:                mgr,
-			DisabledNamespaces: c.DisabledNamespaces,
 		})
 		if err != nil {
 			return err

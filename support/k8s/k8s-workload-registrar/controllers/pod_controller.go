@@ -37,13 +37,14 @@ import (
 
 // PodReconcilerConfig holds the config passed in when creating the reconciler
 type PodReconcilerConfig struct {
+	Cluster            string
+	Ctx                context.Context
+	DisabledNamespaces []string
 	Log                logrus.FieldLogger
 	Mgr                ctrl.Manager
-	Cluster            string
-	TrustDomain        string
 	PodLabel           string
 	PodAnnotation      string
-	DisabledNamespaces []string
+	TrustDomain        string
 }
 
 // PodReconciler holds the runtime configuration and state of this controller
@@ -73,12 +74,12 @@ func NewPodReconciler(config PodReconcilerConfig) (*PodReconciler, error) {
 
 // Reconcile creates a new SPIFFE ID when pods are created
 func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	pod := corev1.Pod{}
-	ctx := context.Background()
-
 	if containsString(r.c.DisabledNamespaces, req.NamespacedName.Namespace) {
 		return ctrl.Result{}, nil
 	}
+
+	pod := corev1.Pod{}
+	ctx := r.c.Ctx
 
 	if err := r.Get(ctx, req.NamespacedName, &pod); err != nil {
 		if !errors.IsNotFound(err) {

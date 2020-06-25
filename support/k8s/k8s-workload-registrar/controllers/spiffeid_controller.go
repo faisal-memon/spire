@@ -31,11 +31,12 @@ import (
 
 // SpiffeIDReconcilerConfig holds the config passed in when creating the reconciler
 type SpiffeIDReconcilerConfig struct {
+	Cluster     string
+	Ctx         context.Context
 	Log         logrus.FieldLogger
+	Mgr         ctrl.Manager
 	R           registration.RegistrationClient
 	TrustDomain string
-	Cluster     string
-	Mgr         ctrl.Manager
 }
 
 // SpiffeIDReconciler holds the runtime configuration and state of this controller
@@ -65,7 +66,7 @@ func NewSpiffeIDReconciler(config SpiffeIDReconcilerConfig) (*SpiffeIDReconciler
 // Reconcile ensures the SPIRE Server entry matches the corresponding CRD
 func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	spiffeID := spiffeidv1beta1.SpiffeID{}
-	ctx := context.Background()
+	ctx := r.c.Ctx
 
 	if err := r.Get(ctx, req.NamespacedName, &spiffeID); err != nil {
 		if !k8serrors.IsNotFound(err) {

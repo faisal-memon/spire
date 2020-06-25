@@ -34,6 +34,7 @@ import (
 
 // NodeReconcilerConfig holds the config passed in when creating the reconciler
 type NodeReconcilerConfig struct {
+	Ctx         context.Context
 	Log         logrus.FieldLogger
 	R           registration.RegistrationClient
 	Mgr         ctrl.Manager
@@ -68,7 +69,7 @@ func NewNodeReconciler(config NodeReconcilerConfig) (*NodeReconciler, error) {
 // a DNS name to the SPIFFE ID CRD
 func (n *NodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	node := corev1.Node{}
-	ctx := context.Background()
+	ctx := n.c.Ctx
 
 	if err := n.Get(ctx, req.NamespacedName, &node); err != nil {
 		if errors.IsNotFound(err) {
