@@ -29,7 +29,6 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -95,29 +94,9 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	spiffeID, err := r.getOrCreatePodEntry(ctx, &pod)
+	_, err := r.getOrCreatePodEntry(ctx, &pod)
 	if err != nil {
 		return ctrl.Result{}, nil
-	}
-
-	// Add label to pod with name of SPIFFE ID
-	if pod.ObjectMeta.Labels["spiffe.io/spiffeid"] != spiffeID.ObjectMeta.Name {
-		retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			// Retrieve the latest version of Pod before attempting update
-			// RetryOnConflict uses exponential backoff to avoid exhausting the apiserver
-			if err := r.Get(ctx, req.NamespacedName, &pod); err != nil {
-				r.c.Log.WithError(err).Error("Failed to get latest version of Pod")
-				return err
-			}
-			pod.ObjectMeta.Labels["spiffe.io/spiffeid"] = spiffeID.ObjectMeta.Name
-
-			return r.Update(ctx, &pod)
-		})
-		if retryErr != nil {
-			r.c.Log.WithError(retryErr).Error("Update failed")
-			return ctrl.Result{}, retryErr
-		}
-		r.c.Log.Info("Added label to pod")
 	}
 
 	return ctrl.Result{}, nil
@@ -134,6 +113,9 @@ func (r *PodReconciler) getOrCreatePodEntry(ctx context.Context, pod *corev1.Pod
 	spiffeID := &spiffeidv1beta1.SpiffeID{
 		ObjectMeta: v1.ObjectMeta{
 			Namespace: pod.Namespace,
+			Labels: map[string]string{
+				"podUid": string(pod.ObjectMeta.UID),
+			},
 		},
 		Spec: spiffeidv1beta1.SpiffeIDSpec{
 			SpiffeId: spiffeIDURI,

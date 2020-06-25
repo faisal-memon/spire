@@ -23,8 +23,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -90,62 +90,27 @@ func (e *EndpointReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				continue
 			}
 
-			// Retrieve pod object for this endpoint
-			pod := corev1.Pod{}
-			podNamespacedName := types.NamespacedName{
-				Name:      address.TargetRef.Name,
-				Namespace: address.TargetRef.Namespace,
-			}
-			if err := e.Get(ctx, podNamespacedName, &pod); err != nil {
-				e.c.Log.WithError(err).Error("Error retrieving pod")
+			spiffeIDList := spiffeidv1beta1.SpiffeIDList{}
+			labelSelector := labels.Set(map[string]string{
+				"podUid": string(address.TargetRef.UID),
+			})
+			err := e.List(ctx, &spiffeIDList, &client.ListOptions{
+				LabelSelector: labelSelector.AsSelector(),
+			})
+			if err != nil {
+				e.c.Log.WithError(err).Error("Error getting spiffeid list")
 				return ctrl.Result{}, err
 			}
 
-			// Retrieve SPIFFE ID CRD for the pod
-			existing := &spiffeidv1beta1.SpiffeID{}
-			spiffeIdName := pod.ObjectMeta.Labels["spiffe.io/spiffeid"]
-			spiffeIdNamespacedName := types.NamespacedName{
-				Name:      spiffeIdName,
-				Namespace: address.TargetRef.Namespace,
-			}
-			if err := e.Get(ctx, spiffeIdNamespacedName, existing); err != nil {
-				if !errors.IsNotFound(err) {
-					e.c.Log.WithFields(logrus.Fields{
-						"name": spiffeIdName,
-					}).WithError(err).Error("Failed to get SpiffeID CRD")
-					return ctrl.Result{}, err
-				}
-				continue
-			}
-
-			// Add service as DNS name if it doesn't already exist
-			retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := e.Get(ctx, spiffeIdNamespacedName, existing); err != nil {
-					e.c.Log.WithError(err).Error("Failed to get latest version of SpiffeID CRD")
-					return err
-				}
-
-				if existing != nil && !containsString(existing.Spec.DnsNames[1:], svcName) {
-					existing.Spec.DnsNames = append(existing.Spec.DnsNames, svcName)
-					err := e.Update(ctx, existing)
-					if err == nil {
-						e.c.Log.WithFields(logrus.Fields{
-							"service": svcName,
-							"pod":     pod.ObjectMeta.Name,
-						}).Info("Added DNS names to SPIFFE CRD")
+			for _, spiffeID := range spiffeIDList.Items {
+				if !containsString(spiffeID.Spec.DnsNames[1:], svcName) {
+					spiffeID.Spec.DnsNames = append(spiffeID.Spec.DnsNames, svcName)
+					err := e.Update(ctx, &spiffeID)
+					if err != nil {
+						return ctrl.Result{}, err
 					}
-					return err
 				}
-
-				return nil
-			})
-			if retryErr != nil {
-				e.c.Log.WithFields(logrus.Fields{
-					"name": spiffeIdName,
-				}).Error(retryErr, "Unable to add DNS names in SpiffeID CRD")
-				return ctrl.Result{}, retryErr
 			}
-
 		}
 	}
 
