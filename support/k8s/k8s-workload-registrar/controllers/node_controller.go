@@ -22,7 +22,6 @@ import (
 	"path"
 
 	"github.com/sirupsen/logrus"
-
 	"github.com/spiffe/spire/pkg/common/idutil"
 	"github.com/spiffe/spire/proto/spire/api/registration"
 	"github.com/spiffe/spire/proto/spire/common"
