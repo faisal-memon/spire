@@ -95,16 +95,16 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	_, err := r.getOrCreatePodEntry(ctx, &pod)
-	if err != nil {
-		return ctrl.Result{}, nil
+	_, err := r.createPodEntry(ctx, &pod)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
 }
 
 // getOrCreatePodEntry attempts to create a new SpiffeID resource. if the entry already exists, it returns it.
-func (r *PodReconciler) getOrCreatePodEntry(ctx context.Context, pod *corev1.Pod) (*spiffeidv1beta1.SpiffeID, error) {
+func (r *PodReconciler) createPodEntry(ctx context.Context, pod *corev1.Pod) (*spiffeidv1beta1.SpiffeID, error) {
 	spiffeIDURI := r.podSpiffeID(pod)
 	// If we have no spiffe ID for the pod, do nothing
 	if spiffeIDURI == "" {

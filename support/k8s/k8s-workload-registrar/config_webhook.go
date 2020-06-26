@@ -11,19 +11,19 @@ import (
 )
 
 const (
-	defaultAddr          = ":8443"
-	defaultCertPath      = "cert.pem"
-	defaultKeyPath       = "key.pem"
-	defaultCaCertPath    = "cacert.pem"
+	defaultAddr       = ":8443"
+	defaultCertPath   = "cert.pem"
+	defaultKeyPath    = "key.pem"
+	defaultCaCertPath = "cacert.pem"
 )
 
 type WebhookConfig struct {
 	CommonConfig
-	Addr                           string   `hcl:"addr"`
-	CaCertPath                     string   `hcl:"cacert_path"`
-	CertPath                       string   `hcl:"cert_path"`
-	InsecureSkipClientVerification bool     `hcl:"insecure_skip_client_verification"`
-	KeyPath                        string   `hcl:"key_path"`
+	Addr                           string `hcl:"addr"`
+	CaCertPath                     string `hcl:"cacert_path"`
+	CertPath                       string `hcl:"cert_path"`
+	InsecureSkipClientVerification bool   `hcl:"insecure_skip_client_verification"`
+	KeyPath                        string `hcl:"key_path"`
 }
 
 func (c *WebhookConfig) ParseConfig(hclConfig string) error {

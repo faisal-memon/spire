@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	defaultLogLevel      = "info"
+	defaultLogLevel = "info"
 
 	modeCRD     = "crd"
 	modeWebhook = "webhook"
@@ -22,18 +22,18 @@ type Config interface {
 }
 
 type CommonConfig struct {
-	LogFormat                      string   `hcl:"log_format"`
-	LogLevel                       string   `hcl:"log_level"`
-	LogPath                        string   `hcl:"log_path"`
-	TrustDomain                    string   `hcl:"trust_domain"`
-	ServerSocketPath               string   `hcl:"server_socket_path"`
-	Cluster                        string   `hcl:"cluster"`
-	PodLabel                       string   `hcl:"pod_label"`
-	PodAnnotation                  string   `hcl:"pod_annotation"`
-	Mode                           string   `hcl:"mode"`
+	LogFormat        string `hcl:"log_format"`
+	LogLevel         string `hcl:"log_level"`
+	LogPath          string `hcl:"log_path"`
+	TrustDomain      string `hcl:"trust_domain"`
+	ServerSocketPath string `hcl:"server_socket_path"`
+	Cluster          string `hcl:"cluster"`
+	PodLabel         string `hcl:"pod_label"`
+	PodAnnotation    string `hcl:"pod_annotation"`
+	Mode             string `hcl:"mode"`
 }
 
-func (c *CommonConfig) ParseConfig (hclConfig string) error {
+func (c *CommonConfig) ParseConfig(hclConfig string) error {
 	c.Mode = defaultMode
 	if err := hcl.Decode(c, hclConfig); err != nil {
 		return errs.New("unable to decode configuration: %v", err)

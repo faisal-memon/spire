@@ -20,12 +20,12 @@ const (
 
 type CRDConfig struct {
 	CommonConfig
-	AddSvcDNSName       bool `hcl:"add_svc_dns_name"`
+	AddSvcDNSName      bool     `hcl:"add_svc_dns_name"`
 	DisabledNamespaces []string `hcl:"disabled_namespaces"`
-	PodController       bool `hcl:"pod_controller"`
+	PodController      bool     `hcl:"pod_controller"`
 }
 
-func (c *CRDConfig) ParseConfig (hclConfig string) error {
+func (c *CRDConfig) ParseConfig(hclConfig string) error {
 	c.PodController = defaultPodController
 	c.AddSvcDNSName = defaultAddSvcDNSName
 	if err := hcl.Decode(c, hclConfig); err != nil {
