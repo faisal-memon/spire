@@ -89,6 +89,7 @@ func (n *NodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		SpiffeId: n.nodeID(node.ObjectMeta.Name),
 		Selectors: []*common.Selector{
 			{Type: "k8s_psat", Value: fmt.Sprintf("cluster:%s", n.c.Cluster)},
+			{Type: "k8s_psat", Value: fmt.Sprintf("agent_node_uid:%s", node.ObjectMeta.UID)},
 		},
 	}
 
