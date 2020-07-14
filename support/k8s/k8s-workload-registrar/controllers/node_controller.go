@@ -73,7 +73,7 @@ func (n *NodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err := n.Get(ctx, req.NamespacedName, &node); err != nil {
 		if errors.IsNotFound(err) {
 			// Delete event
-			if err := n.deleteNodeEntry(ctx, node.ObjectMeta.Name); err != nil {
+			if err := n.deleteNodeEntry(ctx, req.NamespacedName.Name); err != nil {
 				return ctrl.Result{}, err
 			}
 
@@ -110,27 +110,27 @@ func (n *NodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 // deleteNodeEntry remove the service name from the list of DNS Names when the service is removed
 func (n *NodeReconciler) deleteNodeEntry(ctx context.Context, nodeName string) error {
-	entries, err := n.c.R.ListByParentID(ctx, &registration.ParentID{
-		Id: idutil.ServerID(n.c.TrustDomain),
+	entries, err := n.c.R.ListBySpiffeID(ctx, &registration.SpiffeID{
+		Id: n.nodeID(nodeName),
 	})
 	if err != nil {
 		return err
 	}
 
 	// Iterate through all node entries
-	entryID := ""
 	for _, entry := range entries.Entries {
-		if entry.SpiffeId == n.nodeID(nodeName) {
-			entryID = entry.EntryId
+		err = deleteRegistrationEntry(ctx, n.c.R, entry.EntryId)
+		if err != nil {
+			return err
 		}
+
+		n.c.Log.WithFields(logrus.Fields{
+			"entryID":  entry.EntryId,
+			"spiffeID": n.nodeID(nodeName),
+		}).Info("Deleted node entry")
 	}
 
-	// Entry already deleted
-	if entryID == "" {
-		return nil
-	}
-
-	return deleteRegistrationEntry(ctx, n.c.R, entryID)
+	return nil
 }
 
 func (n *NodeReconciler) makeID(pathFmt string, pathArgs ...interface{}) string {
