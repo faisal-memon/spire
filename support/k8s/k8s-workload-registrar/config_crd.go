@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	defaultAddSvcDNSName = true
-	defaultPodController = true
+	defaultAddSvcDNSName   = true
+	defaultPodController   = true
 	defaultMetricsBindAddr = ":8080"
 )
 
