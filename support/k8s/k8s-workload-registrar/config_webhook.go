@@ -4,10 +4,8 @@ import (
 	"context"
 
 	"github.com/hashicorp/hcl"
-	"github.com/spiffe/spire/pkg/common/log"
 	"github.com/spiffe/spire/proto/spire/api/registration"
 	"github.com/zeebo/errs"
-	"google.golang.org/grpc"
 )
 
 const (
@@ -17,8 +15,8 @@ const (
 	defaultCaCertPath = "cacert.pem"
 )
 
-type WebhookConfig struct {
-	CommonConfig
+type WebhookMode struct {
+	CommonMode
 	Addr                           string `hcl:"addr"`
 	CaCertPath                     string `hcl:"cacert_path"`
 	CertPath                       string `hcl:"cert_path"`
@@ -26,7 +24,7 @@ type WebhookConfig struct {
 	KeyPath                        string `hcl:"key_path"`
 }
 
-func (c *WebhookConfig) ParseConfig(hclConfig string) error {
+func (c *WebhookMode) ParseConfig(hclConfig string) error {
 	if err := hcl.Decode(c, hclConfig); err != nil {
 		return errs.New("unable to decode configuration: %v", err)
 	}
@@ -47,15 +45,15 @@ func (c *WebhookConfig) ParseConfig(hclConfig string) error {
 	return nil
 }
 
-func (c *WebhookConfig) Run(ctx context.Context) error {
-	log, err := log.NewLogger(log.WithLevel(c.LogLevel), log.WithFormat(c.LogFormat), log.WithOutputFile(c.LogPath))
+func (c *WebhookMode) Run(ctx context.Context) error {
+	log, err := c.NewLogger()
 	if err != nil {
 		return err
 	}
 	defer log.Close()
 
 	log.WithField("socket_path", c.ServerSocketPath).Info("Dialing server")
-	serverConn, err := grpc.DialContext(ctx, "unix://"+c.ServerSocketPath, grpc.WithInsecure())
+	serverConn, err := c.Dial(ctx)
 	if err != nil {
 		return errs.New("failed to dial server: %v", err)
 	}

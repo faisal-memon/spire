@@ -5,7 +5,9 @@ import (
 	"io/ioutil"
 
 	"github.com/hashicorp/hcl"
+	"github.com/spiffe/spire/pkg/common/log"
 	"github.com/zeebo/errs"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -16,12 +18,12 @@ const (
 	defaultMode = modeWebhook
 )
 
-type Config interface {
+type Mode interface {
 	ParseConfig(hclConfig string) error
 	Run(ctx context.Context) error
 }
 
-type CommonConfig struct {
+type CommonMode struct {
 	LogFormat        string `hcl:"log_format"`
 	LogLevel         string `hcl:"log_level"`
 	LogPath          string `hcl:"log_path"`
@@ -33,7 +35,7 @@ type CommonConfig struct {
 	Mode             string `hcl:"mode"`
 }
 
-func (c *CommonConfig) ParseConfig(hclConfig string) error {
+func (c *CommonMode) ParseConfig(hclConfig string) error {
 	c.Mode = defaultMode
 	if err := hcl.Decode(c, hclConfig); err != nil {
 		return errs.New("unable to decode configuration: %v", err)
@@ -61,27 +63,37 @@ func (c *CommonConfig) ParseConfig(hclConfig string) error {
 	return nil
 }
 
-func LoadConfig(path string) (Config, error) {
+func (c *CommonMode) NewLogger() (*log.Logger, error) {
+	return log.NewLogger(log.WithLevel(c.LogLevel), log.WithFormat(c.LogFormat), log.WithOutputFile(c.LogPath))
+}
+
+func (c *CommonMode) Dial(ctx context.Context) (*grpc.ClientConn, error) {
+	return grpc.DialContext(ctx, "unix://"+c.ServerSocketPath, grpc.WithInsecure())
+}
+
+func LoadMode(path string) (Mode, error) {
 	hclBytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, errs.New("unable to load configuration: %v", err)
 	}
 
-	c := &CommonConfig{}
-	c.ParseConfig(string(hclBytes))
+	c := &CommonMode{}
+	if err = c.ParseConfig(string(hclBytes)); err != nil {
+		return nil, err
+	}
 
-	var config Config
+	var mode Mode
 	switch c.Mode {
 	case modeCRD:
-		config = &CRDConfig{
-			CommonConfig: *c,
+		mode = &CRDMode{
+			CommonMode: *c,
 		}
 	default:
-		config = &WebhookConfig{
-			CommonConfig: *c,
+		mode = &WebhookMode{
+			CommonMode: *c,
 		}
 	}
 
-	err = config.ParseConfig(string(hclBytes))
-	return config, err
+	err = mode.ParseConfig(string(hclBytes))
+	return mode, err
 }

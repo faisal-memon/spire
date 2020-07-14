@@ -4,11 +4,9 @@ import (
 	"context"
 
 	"github.com/hashicorp/hcl"
-	"github.com/spiffe/spire/pkg/common/log"
 	"github.com/spiffe/spire/proto/spire/api/registration"
 	"github.com/spiffe/spire/support/k8s/k8s-workload-registrar/controllers"
 	"github.com/zeebo/errs"
-	"google.golang.org/grpc"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -18,14 +16,14 @@ const (
 	defaultAddSvcDNSName = true
 )
 
-type CRDConfig struct {
-	CommonConfig
+type CRDMode struct {
+	CommonMode
 	AddSvcDNSName      bool     `hcl:"add_svc_dns_name"`
 	DisabledNamespaces []string `hcl:"disabled_namespaces"`
 	PodController      bool     `hcl:"pod_controller"`
 }
 
-func (c *CRDConfig) ParseConfig(hclConfig string) error {
+func (c *CRDMode) ParseConfig(hclConfig string) error {
 	c.PodController = defaultPodController
 	c.AddSvcDNSName = defaultAddSvcDNSName
 	if err := hcl.Decode(c, hclConfig); err != nil {
@@ -39,15 +37,15 @@ func (c *CRDConfig) ParseConfig(hclConfig string) error {
 	return nil
 }
 
-func (c *CRDConfig) Run(ctx context.Context) error {
-	log, err := log.NewLogger(log.WithLevel(c.LogLevel), log.WithFormat(c.LogFormat), log.WithOutputFile(c.LogPath))
+func (c *CRDMode) Run(ctx context.Context) error {
+	log, err := c.NewLogger()
 	if err != nil {
 		return err
 	}
 	defer log.Close()
 
 	log.WithField("socket_path", c.ServerSocketPath).Info("Dialing server")
-	serverConn, err := grpc.DialContext(ctx, "unix://"+c.ServerSocketPath, grpc.WithInsecure())
+	serverConn, err := c.Dial(ctx)
 	if err != nil {
 		return errs.New("failed to dial server: %v", err)
 	}

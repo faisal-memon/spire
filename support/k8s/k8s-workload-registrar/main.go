@@ -20,10 +20,10 @@ func main() {
 }
 
 func run(ctx context.Context, configPath string) error {
-	config, err := LoadConfig(configPath)
+	mode, err := LoadMode(configPath)
 	if err != nil {
 		return err
 	}
 
-	return config.Run(ctx)
+	return mode.Run(ctx)
 }
