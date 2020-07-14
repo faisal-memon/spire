@@ -95,7 +95,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	_, err := r.createPodEntry(ctx, &pod)
+	err := r.createPodEntry(ctx, &pod)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return ctrl.Result{}, err
 	}
@@ -103,12 +103,12 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
-// getOrCreatePodEntry attempts to create a new SpiffeID resource. if the entry already exists, it returns it.
-func (r *PodReconciler) createPodEntry(ctx context.Context, pod *corev1.Pod) (*spiffeidv1beta1.SpiffeID, error) {
+// createPodEntry attempts to create a new SpiffeID resource.
+func (r *PodReconciler) createPodEntry(ctx context.Context, pod *corev1.Pod) error {
 	spiffeIDURI := r.podSpiffeID(pod)
 	// If we have no spiffe ID for the pod, do nothing
 	if spiffeIDURI == "" {
-		return nil, nil
+		return nil
 	}
 
 	spiffeID := &spiffeidv1beta1.SpiffeID{
@@ -131,15 +131,10 @@ func (r *PodReconciler) createPodEntry(ctx context.Context, pod *corev1.Pod) (*s
 	}
 	err := r.setOwnerRef(pod, spiffeID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	err = r.createSpiffeId(ctx, pod.ObjectMeta.Name, spiffeID)
-	if err != nil {
-		return nil, err
-	}
-
-	return spiffeID, nil
+	return r.createSpiffeId(ctx, pod.ObjectMeta.Name, spiffeID)
 }
 
 // podSpiffeID returns the desired spiffe ID for the pod, or nil if it should be ignored
@@ -169,7 +164,7 @@ func (r *PodReconciler) podSpiffeID(pod *corev1.Pod) string {
 	return r.makeID("ns/%s/sa/%s", pod.Namespace, pod.Spec.ServiceAccountName)
 }
 
-// setOwnerRef sets the pod as owner of new SPIFFE ID
+// setOwnerRef sets the pod as owner of a new SPIFFE ID resource locally
 func (r *PodReconciler) setOwnerRef(pod *corev1.Pod, spiffeID *spiffeidv1beta1.SpiffeID) error {
 	err := controllerutil.SetControllerReference(pod, spiffeID, r.scheme)
 	if err != nil {
@@ -199,7 +194,10 @@ func (r *PodReconciler) createSpiffeId(ctx context.Context, podName string, spif
 				Name:      spiffeId.ObjectMeta.Name,
 				Namespace: spiffeId.ObjectMeta.Namespace,
 			}
-			r.Get(ctx, spiffeIdNamespacedName, &existing)
+			err = r.Get(ctx, spiffeIdNamespacedName, &existing)
+			if err != nil {
+				return err
+			}
 			if spiffeId.Spec.Selector.PodUid != existing.Spec.Selector.PodUid {
 				collisionCount++
 				continue
