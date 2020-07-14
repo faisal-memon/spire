@@ -34,16 +34,16 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-func NewManager() (ctrl.Manager, error) {
+func NewManager(leaderElection bool, metricsBindAddr string) (ctrl.Manager, error) {
 	scheme := runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(scheme)
 	_ = spiffeidv1beta1.AddToScheme(scheme)
 	_ = corev1.AddToScheme(scheme)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		MetricsBindAddress: "0",
+		LeaderElection:     leaderElection,
+		MetricsBindAddress: metricsBindAddr,
 		Scheme:             scheme,
-		Port:               9443,
 	})
 	if err != nil {
 		return nil, err

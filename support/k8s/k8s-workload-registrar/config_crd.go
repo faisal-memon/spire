@@ -12,14 +12,17 @@ import (
 )
 
 const (
-	defaultPodController = true
 	defaultAddSvcDNSName = true
+	defaultPodController = true
+	defaultMetricsBindAddr = ":8080"
 )
 
 type CRDMode struct {
 	CommonMode
 	AddSvcDNSName      bool     `hcl:"add_svc_dns_name"`
 	DisabledNamespaces []string `hcl:"disabled_namespaces"`
+	LeaderElection     bool     `hcl:"leader_election"`
+	MetricsBindAddr    string   `hcl:"metrics_bind_addr"`
 	PodController      bool     `hcl:"pod_controller"`
 }
 
@@ -30,6 +33,10 @@ func (c *CRDMode) ParseConfig(hclConfig string) error {
 		return errs.New("unable to decode configuration: %v", err)
 	}
 
+	if c.MetricsBindAddr == "" {
+		c.MetricsBindAddr = defaultMetricsBindAddr
+	}
+
 	if c.DisabledNamespaces == nil {
 		c.DisabledNamespaces = defaultDisabledNamespaces()
 	}
@@ -38,7 +45,7 @@ func (c *CRDMode) ParseConfig(hclConfig string) error {
 }
 
 func (c *CRDMode) Run(ctx context.Context) error {
-	mgr, err := controllers.NewManager()
+	mgr, err := controllers.NewManager(c.LeaderElection, c.MetricsBindAddr)
 	if err != nil {
 		return err
 	}

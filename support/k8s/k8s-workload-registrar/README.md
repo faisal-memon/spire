@@ -45,9 +45,11 @@ The following configuration directives are specific to `"crd"` mode:
 
 | Key                        | Type    | Required? | Description                              | Default |
 | -------------------------- | --------| ---------| ----------------------------------------- | ------- |
-| `pod_controller`           | bool    | optional | Enable auto generation of SVIDs for new pods that are created | `true` |
 | `add_svc_dns_name`         | bool    | optional | Enable adding service names as SAN DNS names to endpoint pods | `true` |
 | `disabled_namespaces`      | []string| optional | Comma seperated list of namespaces to disable auto SVID generation for | `"kube-system"` |
+| `leader_election`          | bool    | optional | Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager. | `false` |
+| `metrics_bind_addr`        | string  | optional | The address the metric endpoint binds to. The special value of "0" disables metrics. | `":8080"` |
+| `pod_controller`           | bool    | optional | Enable auto generation of SVIDs for new pods that are created | `true` |
 
 
 ### Example
