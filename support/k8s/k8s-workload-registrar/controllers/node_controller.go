@@ -48,7 +48,7 @@ type NodeReconciler struct {
 }
 
 // NewNodeReconciler creates a new NodeReconciler object
-func NewNodeReconciler(config NodeReconcilerConfig) (*NodeReconciler, error) {
+func AddNodeReconciler(config NodeReconcilerConfig) error {
 	r := &NodeReconciler{
 		Client: config.Mgr.GetClient(),
 		c:      config,
@@ -58,10 +58,10 @@ func NewNodeReconciler(config NodeReconcilerConfig) (*NodeReconciler, error) {
 		For(&corev1.Node{}).
 		Complete(r)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return r, nil
+	return nil
 }
 
 // Reconcile steps through the endpoints for each service and adds the name of the service as

@@ -57,7 +57,7 @@ func (c *CRDMode) Run(ctx context.Context) error {
 	}
 
 	log.Info("Initializing SPIFFE ID CRD Mode")
-	_, err = controllers.NewSpiffeIDReconciler(controllers.SpiffeIDReconcilerConfig{
+	err = controllers.AddSpiffeIDReconciler(controllers.SpiffeIDReconcilerConfig{
 		Cluster:     c.Cluster,
 		Ctx:         ctx,
 		Log:         log,
@@ -70,7 +70,7 @@ func (c *CRDMode) Run(ctx context.Context) error {
 	}
 
 	if c.PodController {
-		_, err = controllers.NewNodeReconciler(controllers.NodeReconcilerConfig{
+		err = controllers.AddNodeReconciler(controllers.NodeReconcilerConfig{
 			Cluster:     c.Cluster,
 			Ctx:         ctx,
 			Log:         log,
@@ -81,7 +81,7 @@ func (c *CRDMode) Run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		_, err := controllers.NewPodReconciler(controllers.PodReconcilerConfig{
+		err := controllers.AddPodReconciler(controllers.PodReconcilerConfig{
 			Cluster:            c.Cluster,
 			Ctx:                ctx,
 			DisabledNamespaces: c.DisabledNamespaces,
@@ -97,7 +97,7 @@ func (c *CRDMode) Run(ctx context.Context) error {
 	}
 
 	if c.AddSvcDNSName {
-		_, err := controllers.NewEndpointReconciler(controllers.EndpointReconcilerConfig{
+		err := controllers.AddEndpointReconciler(controllers.EndpointReconcilerConfig{
 			Ctx:                ctx,
 			DisabledNamespaces: c.DisabledNamespaces,
 			Log:                log,

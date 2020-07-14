@@ -47,7 +47,7 @@ type SpiffeIDReconciler struct {
 }
 
 // NewSpiffeIDReconciler creates a new SpiffeIDReconciler object
-func NewSpiffeIDReconciler(config SpiffeIDReconcilerConfig) (*SpiffeIDReconciler, error) {
+func AddSpiffeIDReconciler(config SpiffeIDReconcilerConfig) error {
 	r := &SpiffeIDReconciler{
 		Client: config.Mgr.GetClient(),
 		c:      config,
@@ -57,10 +57,10 @@ func NewSpiffeIDReconciler(config SpiffeIDReconcilerConfig) (*SpiffeIDReconciler
 		For(&spiffeidv1beta1.SpiffeID{}).
 		Complete(r)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return r, nil
+	return nil
 }
 
 // Reconcile ensures the SPIRE Server entry matches the corresponding CRD

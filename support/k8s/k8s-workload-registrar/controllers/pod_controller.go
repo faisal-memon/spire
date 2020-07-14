@@ -55,7 +55,7 @@ type PodReconciler struct {
 }
 
 // NewPodReconciler creates a new PodReconciler object
-func NewPodReconciler(config PodReconcilerConfig) (*PodReconciler, error) {
+func AddPodReconciler(config PodReconcilerConfig) error {
 	r := &PodReconciler{
 		Client: config.Mgr.GetClient(),
 		c:      config,
@@ -66,10 +66,10 @@ func NewPodReconciler(config PodReconcilerConfig) (*PodReconciler, error) {
 		For(&corev1.Pod{}).
 		Complete(r)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return r, nil
+	return nil
 }
 
 // Reconcile creates a new SPIFFE ID when pods are created

@@ -44,7 +44,7 @@ type EndpointReconciler struct {
 }
 
 // NewEndpointReconciler creates a new EndpointReconciler object
-func NewEndpointReconciler(config EndpointReconcilerConfig) (*EndpointReconciler, error) {
+func AddEndpointReconciler(config EndpointReconcilerConfig) error {
 	r := &EndpointReconciler{
 		Client: config.Mgr.GetClient(),
 		c:      config,
@@ -54,10 +54,10 @@ func NewEndpointReconciler(config EndpointReconcilerConfig) (*EndpointReconciler
 		For(&corev1.Endpoints{}).
 		Complete(r)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return r, nil
+	return nil
 }
 
 // Reconcile steps through the endpoints for each service and adds the name of the service as
