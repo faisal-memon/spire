@@ -38,31 +38,18 @@ func (c *CRDMode) ParseConfig(hclConfig string) error {
 }
 
 func (c *CRDMode) Run(ctx context.Context) error {
-	log, err := c.NewLogger()
-	if err != nil {
-		return err
-	}
-	defer log.Close()
-
-	log.WithField("socket_path", c.ServerSocketPath).Info("Dialing server")
-	serverConn, err := c.Dial(ctx)
-	if err != nil {
-		return errs.New("failed to dial server: %v", err)
-	}
-	defer serverConn.Close()
-
 	mgr, err := controllers.NewManager()
 	if err != nil {
 		return err
 	}
 
-	log.Info("Initializing SPIFFE ID CRD Mode")
+	c.log.Info("Initializing SPIFFE ID CRD Mode")
 	err = controllers.AddSpiffeIDReconciler(controllers.SpiffeIDReconcilerConfig{
 		Cluster:     c.Cluster,
 		Ctx:         ctx,
-		Log:         log,
+		Log:         c.log,
 		Mgr:         mgr,
-		R:           registration.NewRegistrationClient(serverConn),
+		R:           registration.NewRegistrationClient(c.serverConn),
 		TrustDomain: c.TrustDomain,
 	})
 	if err != nil {
@@ -73,9 +60,9 @@ func (c *CRDMode) Run(ctx context.Context) error {
 		err = controllers.AddNodeReconciler(controllers.NodeReconcilerConfig{
 			Cluster:     c.Cluster,
 			Ctx:         ctx,
-			Log:         log,
+			Log:         c.log,
 			Mgr:         mgr,
-			R:           registration.NewRegistrationClient(serverConn),
+			R:           registration.NewRegistrationClient(c.serverConn),
 			TrustDomain: c.TrustDomain,
 		})
 		if err != nil {
@@ -85,7 +72,7 @@ func (c *CRDMode) Run(ctx context.Context) error {
 			Cluster:            c.Cluster,
 			Ctx:                ctx,
 			DisabledNamespaces: c.DisabledNamespaces,
-			Log:                log,
+			Log:                c.log,
 			Mgr:                mgr,
 			PodLabel:           c.PodLabel,
 			PodAnnotation:      c.PodAnnotation,
@@ -100,7 +87,7 @@ func (c *CRDMode) Run(ctx context.Context) error {
 		err := controllers.AddEndpointReconciler(controllers.EndpointReconcilerConfig{
 			Ctx:                ctx,
 			DisabledNamespaces: c.DisabledNamespaces,
-			Log:                log,
+			Log:                c.log,
 			Mgr:                mgr,
 		})
 		if err != nil {

@@ -33,6 +33,8 @@ type CommonMode struct {
 	PodLabel         string `hcl:"pod_label"`
 	PodAnnotation    string `hcl:"pod_annotation"`
 	Mode             string `hcl:"mode"`
+	log              *log.Logger
+	serverConn       *grpc.ClientConn
 }
 
 func (c *CommonMode) ParseConfig(hclConfig string) error {
@@ -63,15 +65,20 @@ func (c *CommonMode) ParseConfig(hclConfig string) error {
 	return nil
 }
 
-func (c *CommonMode) NewLogger() (*log.Logger, error) {
-	return log.NewLogger(log.WithLevel(c.LogLevel), log.WithFormat(c.LogFormat), log.WithOutputFile(c.LogPath))
+func (c *CommonMode) SetupLogger() error {
+	log, err := log.NewLogger(log.WithLevel(c.LogLevel), log.WithFormat(c.LogFormat), log.WithOutputFile(c.LogPath))
+	c.log = log
+	return err
 }
 
-func (c *CommonMode) Dial(ctx context.Context) (*grpc.ClientConn, error) {
-	return grpc.DialContext(ctx, "unix://"+c.ServerSocketPath, grpc.WithInsecure())
+func (c *CommonMode) Dial(ctx context.Context) error {
+	c.log.WithField("socket_path", c.ServerSocketPath).Info("Dialing server")
+	serverConn, err := grpc.DialContext(ctx, "unix://"+c.ServerSocketPath, grpc.WithInsecure())
+	c.serverConn = serverConn
+	return err
 }
 
-func LoadMode(path string) (Mode, error) {
+func LoadMode(ctx context.Context, path string) (Mode, error) {
 	hclBytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, errs.New("unable to load configuration: %v", err)
@@ -79,7 +86,13 @@ func LoadMode(path string) (Mode, error) {
 
 	c := &CommonMode{}
 	if err = c.ParseConfig(string(hclBytes)); err != nil {
-		return nil, err
+		return nil, errs.New("error parsing common config: %v", err)
+	}
+	if err = c.SetupLogger(); err != nil {
+		return nil, errs.New("error setting up logging: %v", err)
+	}
+	if err = c.Dial(ctx); err != nil {
+		return nil, errs.New("failed to dial server: %v", err)
 	}
 
 	var mode Mode

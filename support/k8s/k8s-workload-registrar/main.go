@@ -20,7 +20,7 @@ func main() {
 }
 
 func run(ctx context.Context, configPath string) error {
-	mode, err := LoadMode(configPath)
+	mode, err := LoadMode(ctx, configPath)
 	if err != nil {
 		return err
 	}

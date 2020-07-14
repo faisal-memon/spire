@@ -46,35 +46,22 @@ func (c *WebhookMode) ParseConfig(hclConfig string) error {
 }
 
 func (c *WebhookMode) Run(ctx context.Context) error {
-	log, err := c.NewLogger()
-	if err != nil {
-		return err
-	}
-	defer log.Close()
-
-	log.WithField("socket_path", c.ServerSocketPath).Info("Dialing server")
-	serverConn, err := c.Dial(ctx)
-	if err != nil {
-		return errs.New("failed to dial server: %v", err)
-	}
-	defer serverConn.Close()
-
 	controller := NewController(ControllerConfig{
-		Log:           log,
-		R:             registration.NewRegistrationClient(serverConn),
+		Log:           c.log,
+		R:             registration.NewRegistrationClient(c.serverConn),
 		TrustDomain:   c.TrustDomain,
 		Cluster:       c.Cluster,
 		PodLabel:      c.PodLabel,
 		PodAnnotation: c.PodAnnotation,
 	})
 
-	log.Info("Initializing registrar")
+	c.log.Info("Initializing registrar")
 	if err := controller.Initialize(ctx); err != nil {
 		return err
 	}
 
 	server, err := NewServer(ServerConfig{
-		Log:                            log,
+		Log:                            c.log,
 		Addr:                           c.Addr,
 		Handler:                        NewWebhookHandler(controller),
 		CertPath:                       c.CertPath,
