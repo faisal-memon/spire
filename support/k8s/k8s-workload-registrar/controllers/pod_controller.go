@@ -90,7 +90,7 @@ func (r *PodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Pod neeeds to be assigned a node before it can get a SPIFFE ID
+	// Pod needs to be assigned a node before it can get a SPIFFE ID
 	if pod.Spec.NodeName == "" {
 		return ctrl.Result{}, nil
 	}

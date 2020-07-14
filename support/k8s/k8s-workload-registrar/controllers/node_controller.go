@@ -102,7 +102,7 @@ func (n *NodeReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		n.c.Log.WithFields(logrus.Fields{
 			"entryID":  response.Entry.EntryId,
 			"spiffeID": n.nodeID(node.ObjectMeta.Name),
-		}).Info("Created entry")
+		}).Info("Created node entry")
 	}
 
 	return ctrl.Result{}, nil
