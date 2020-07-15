@@ -22,11 +22,11 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/spire/proto/spire/api/registration"
 	"github.com/spiffe/spire/proto/spire/common"
+	spiffeidv1beta1 "github.com/spiffe/spire/support/k8s/k8s-workload-registrar/mode-crd/api/spiffeid/v1beta1"
+
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	spiffeidv1beta1 "github.com/spiffe/spire/api/spiffecrd/v1beta1"
 )
 
 // SpiffeIDReconcilerConfig holds the config passed in when creating the reconciler

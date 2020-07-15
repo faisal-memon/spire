@@ -23,7 +23,7 @@ import (
 	"hash/fnv"
 
 	"github.com/davecgh/go-spew/spew"
-	spiffeidv1beta1 "github.com/spiffe/spire/api/spiffecrd/v1beta1"
+	spiffeidv1beta1 "github.com/spiffe/spire/support/k8s/k8s-workload-registrar/mode-crd/api/spiffeid/v1beta1"
 	"github.com/spiffe/spire/proto/spire/api/registration"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

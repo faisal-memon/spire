@@ -19,7 +19,7 @@ import (
 	"context"
 
 	"github.com/sirupsen/logrus"
-	spiffeidv1beta1 "github.com/spiffe/spire/api/spiffecrd/v1beta1"
+	spiffeidv1beta1 "github.com/spiffe/spire/support/k8s/k8s-workload-registrar/mode-crd/api/spiffeid/v1beta1"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"

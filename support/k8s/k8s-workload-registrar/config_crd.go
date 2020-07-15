@@ -5,7 +5,7 @@ import (
 
 	"github.com/hashicorp/hcl"
 	"github.com/spiffe/spire/proto/spire/api/registration"
-	"github.com/spiffe/spire/support/k8s/k8s-workload-registrar/controllers"
+	"github.com/spiffe/spire/support/k8s/k8s-workload-registrar/mode-crd/controllers"
 	"github.com/zeebo/errs"
 
 	ctrl "sigs.k8s.io/controller-runtime"
