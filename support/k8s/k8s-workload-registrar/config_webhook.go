@@ -46,6 +46,13 @@ func (c *WebhookMode) ParseConfig(hclConfig string) error {
 }
 
 func (c *WebhookMode) Run(ctx context.Context) error {
+	if err := c.SetupLogger(); err != nil {
+		return errs.New("error setting up logging: %v", err)
+	}
+	if err := c.Dial(ctx); err != nil {
+		return errs.New("failed to dial server: %v", err)
+	}
+
 	controller := NewController(ControllerConfig{
 		Log:           c.log,
 		R:             registration.NewRegistrationClient(c.serverConn),

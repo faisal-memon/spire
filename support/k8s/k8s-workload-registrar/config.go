@@ -88,12 +88,6 @@ func LoadMode(ctx context.Context, path string) (Mode, error) {
 	if err = c.ParseConfig(string(hclBytes)); err != nil {
 		return nil, errs.New("error parsing common config: %v", err)
 	}
-	if err = c.SetupLogger(); err != nil {
-		return nil, errs.New("error setting up logging: %v", err)
-	}
-	if err = c.Dial(ctx); err != nil {
-		return nil, errs.New("failed to dial server: %v", err)
-	}
 
 	var mode Mode
 	switch c.Mode {

@@ -45,6 +45,13 @@ func (c *CRDMode) ParseConfig(hclConfig string) error {
 }
 
 func (c *CRDMode) Run(ctx context.Context) error {
+	if err := c.SetupLogger(); err != nil {
+		return errs.New("error setting up logging: %v", err)
+	}
+	if err := c.Dial(ctx); err != nil {
+		return  errs.New("failed to dial server: %v", err)
+	}
+
 	mgr, err := controllers.NewManager(c.LeaderElection, c.MetricsBindAddr)
 	if err != nil {
 		return err

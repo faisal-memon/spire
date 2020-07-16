@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -17,7 +18,7 @@ var (
 `
 )
 
-func TestLoadConfig(t *testing.T) {
+func TestLoadMode(t *testing.T) {
 	require := require.New(t)
 
 	dir, err := ioutil.TempDir("", "spire-adm-webhook-config-")
@@ -26,48 +27,52 @@ func TestLoadConfig(t *testing.T) {
 
 	confPath := filepath.Join(dir, "test.conf")
 
-	_, err = LoadConfig(confPath)
+	_, err = LoadMode(context.TODO(), confPath)
 	require.Error(err)
 	require.Contains(err.Error(), "unable to load configuration:")
 
 	err = ioutil.WriteFile(confPath, []byte(testMinimalConfig), 0600)
 	require.NoError(err)
 
-	config, err := LoadConfig(confPath)
+	config, err := LoadMode(context.TODO(), confPath)
 	require.NoError(err)
 
-	require.Equal(&Config{
-		LogLevel:         defaultLogLevel,
+	require.Equal(&WebhookMode{
+		CommonMode: CommonMode{
+			ServerSocketPath: "SOCKETPATH",
+			TrustDomain:      "TRUSTDOMAIN",
+			Cluster:          "CLUSTER",
+			LogLevel:         defaultLogLevel,
+			Mode:             "webhook",
+		},
 		Addr:             ":8443",
 		CertPath:         defaultCertPath,
 		KeyPath:          defaultKeyPath,
 		CaCertPath:       defaultCaCertPath,
-		ServerSocketPath: "SOCKETPATH",
-		TrustDomain:      "TRUSTDOMAIN",
-		Cluster:          "CLUSTER",
 	}, config)
-}
 
-func TestParseConfig(t *testing.T) {
 	testCases := []struct {
 		name string
 		in   string
-		out  *Config
+		out  *WebhookMode
 		err  string
 	}{
 		{
 			name: "defaults",
 			in:   testMinimalConfig,
-			out: &Config{
-				LogLevel:                       defaultLogLevel,
+			out: &WebhookMode{
+				CommonMode: CommonMode{
+					LogLevel:                       defaultLogLevel,
+					ServerSocketPath:               "SOCKETPATH",
+					TrustDomain:                    "TRUSTDOMAIN",
+					Cluster:                        "CLUSTER",
+					Mode:                           "webhook",
+				},
 				Addr:                           ":8443",
 				CertPath:                       defaultCertPath,
 				KeyPath:                        defaultKeyPath,
 				CaCertPath:                     defaultCaCertPath,
 				InsecureSkipClientVerification: false,
-				ServerSocketPath:               "SOCKETPATH",
-				TrustDomain:                    "TRUSTDOMAIN",
-				Cluster:                        "CLUSTER",
 			},
 		},
 		{
@@ -85,18 +90,21 @@ func TestParseConfig(t *testing.T) {
 				cluster = "CLUSTEROVERRIDE"
 				pod_label = "PODLABEL"
 			`,
-			out: &Config{
-				LogLevel:                       "LEVELOVERRIDE",
-				LogPath:                        "PATHOVERRIDE",
+			out: &WebhookMode{
+				CommonMode: CommonMode{
+					LogLevel:                       "LEVELOVERRIDE",
+					LogPath:                        "PATHOVERRIDE",
+					ServerSocketPath:               "SOCKETPATHOVERRIDE",
+					TrustDomain:                    "TRUSTDOMAINOVERRIDE",
+					Cluster:                        "CLUSTEROVERRIDE",
+					PodLabel:                       "PODLABEL",
+					Mode:                           "webhook",
+				},
 				Addr:                           ":1234",
 				CertPath:                       "CERTOVERRIDE",
 				KeyPath:                        "KEYOVERRIDE",
 				CaCertPath:                     "CACERTOVERRIDE",
 				InsecureSkipClientVerification: true,
-				ServerSocketPath:               "SOCKETPATHOVERRIDE",
-				TrustDomain:                    "TRUSTDOMAINOVERRIDE",
-				Cluster:                        "CLUSTEROVERRIDE",
-				PodLabel:                       "PODLABEL",
 			},
 		},
 		{
@@ -141,14 +149,17 @@ func TestParseConfig(t *testing.T) {
 	for _, testCase := range testCases {
 		testCase := testCase // alias loop variable as it is used in the closure
 		t.Run(testCase.name, func(t *testing.T) {
-			actual, err := ParseConfig(testCase.in)
+			err := ioutil.WriteFile(confPath, []byte(testCase.in), 0600)
+			require.NoError(err)
+
+			actual, err := LoadMode(context.TODO(), confPath)
 			if testCase.err != "" {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), testCase.err)
+				require.Error(err)
+				require.Contains(err.Error(), testCase.err)
 				return
 			}
-			require.NoError(t, err)
-			require.Equal(t, testCase.out, actual)
+			require.NoError(err)
+			require.Equal(testCase.out, actual)
 		})
 	}
 }
