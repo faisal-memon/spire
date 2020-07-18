@@ -70,7 +70,10 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if err := r.Get(ctx, req.NamespacedName, &spiffeID); err != nil {
 		if !k8serrors.IsNotFound(err) {
-			r.c.Log.WithError(err).Error("Unable to fetch SpiffeID CRD")
+			r.c.Log.WithFields(logrus.Fields{
+				"name":      spiffeID.Name,
+				"namespace": spiffeID.Namespace,
+			}).WithError(err).Error("Unable to fetch SpiffeID resource")
 			return ctrl.Result{}, err
 		}
 
@@ -83,6 +86,10 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		if !containsString(spiffeID.GetFinalizers(), myFinalizerName) {
 			spiffeID.SetFinalizers(append(spiffeID.GetFinalizers(), myFinalizerName))
 			if err := r.Update(ctx, &spiffeID); err != nil {
+				r.c.Log.WithFields(logrus.Fields{
+					"name":      spiffeID.Name,
+					"namespace": spiffeID.Namespace,
+				}).WithError(err).Error("Unable to update finalizer list")
 				return ctrl.Result{}, err
 			}
 		}

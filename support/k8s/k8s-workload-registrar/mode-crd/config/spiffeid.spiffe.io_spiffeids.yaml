@@ -19,7 +19,7 @@ spec:
     status: {}
   validation:
     openAPIV3Schema:
-      description: SpiffeID is the Schema for the spireentries API
+      description: SpiffeID is the Schema for the spiffeid API
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -40,6 +40,8 @@ spec:
               items:
                 type: string
               type: array
+            parentId:
+              type: string
             selector:
               properties:
                 arbitrary:
@@ -47,8 +49,17 @@ spec:
                   items:
                     type: string
                   type: array
+                containerImage:
+                  description: Container image to match for this spiffe ID
+                  type: string
+                containerName:
+                  description: Container name to match for this spiffe ID
+                  type: string
                 namespace:
                   description: Namespace to match for this spiffe ID
+                  type: string
+                nodeName:
+                  description: Node name to match for this spiffe ID
                   type: string
                 podLabel:
                   additionalProperties:
@@ -68,7 +79,7 @@ spec:
             spiffeId:
               type: string
           required:
-          - dnsNames
+          - parentId
           - selector
           - spiffeId
           type: object

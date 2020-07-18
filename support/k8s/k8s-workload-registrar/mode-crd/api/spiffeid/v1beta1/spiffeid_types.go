@@ -31,12 +31,12 @@ type Selector struct {
 	Namespace string `json:"namespace,omitempty"`
 	// ServiceAccount to match for this spiffe ID
 	ServiceAccount string `json:"serviceAccount,omitempty"`
-	// ContainerImage to match
+	// ContainerImage to match for this spiffe ID
 	ContainerImage string `json:"containerImage,omitempty"`
-	// ContainerName to match
+	// ContainerName to match for this spiffe ID
 	ContainerName string `json:"containerName,omitempty"`
-	// NodeName to match
-	NodeName string `json:"NodeName,omitempty"`
+	// NodeName to match for this spiffe ID
+	NodeName string `json:"nodeName,omitempty"`
 	// Arbitrary k8s selectors
 	Arbitrary []string `json:"arbitrary,omitempty"`
 }
@@ -46,7 +46,7 @@ type SpiffeIDSpec struct {
 	ParentId string   `json:"parentId"`
 	SpiffeId string   `json:"spiffeId"`
 	Selector Selector `json:"selector"`
-	DnsNames []string `json:"dnsNames"`
+	DnsNames []string `json:"dnsNames,omitempty"`
 }
 
 // SpiffeIDStatus defines the observed state of SpiffeID
