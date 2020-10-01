@@ -20,8 +20,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/spire/pkg/common/selector"
-	"github.com/spiffe/spire/proto/spire/api/registration"
+	"github.com/spiffe/spire/proto/spire/api/server/entry/v1"
 	"github.com/spiffe/spire/proto/spire/common"
+	"github.com/spiffe/spire/proto/spire/types"
+	"github.com/spiffe/spire/pkg/server/api"
 	spiffeidv1beta1 "github.com/spiffe/spire/support/k8s/k8s-workload-registrar/mode-crd/api/spiffeid/v1beta1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -38,7 +40,7 @@ type SpiffeIDReconcilerConfig struct {
 	Cluster     string
 	Ctx         context.Context
 	Log         logrus.FieldLogger
-	R           registration.RegistrationClient
+	R           entry.EntryClient
 	TrustDomain string
 }
 
@@ -152,20 +154,22 @@ func (r *SpiffeIDReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 // updateOrCreateSpiffeID attempts to create a new entry. if the entry already exists, it updates it.
 func (r *SpiffeIDReconciler) updateOrCreateSpiffeID(ctx context.Context, spiffeID *spiffeidv1beta1.SpiffeID) (*string, bool, error) {
-	entry := &common.RegistrationEntry{
+	protoEntry, err := api.RegistrationEntryToProto(&common.RegistrationEntry{
 		ParentId:  spiffeID.Spec.ParentId,
 		SpiffeId:  spiffeID.Spec.SpiffeId,
 		Selectors: spiffeID.CommonSelector(),
 		DnsNames:  spiffeID.Spec.DnsNames,
+	})
+	if err != nil {
+		return nil, false, err
 	}
 
-	var existing *common.RegistrationEntry
+	var existing *types.Entry
 	var entryID string
-	var err error
 	var preexisting bool
 	if spiffeID.Status.EntryId != nil {
 		// Fetch existing entry
-		existing, err = r.c.R.FetchEntry(r.c.Ctx, &registration.RegistrationEntryID{
+		existing, err = r.c.R.GetEntry(r.c.Ctx, &entry.GetEntryRequest{
 			Id: *spiffeID.Status.EntryId,
 		})
 		if err != nil {
@@ -176,20 +180,22 @@ func (r *SpiffeIDReconciler) updateOrCreateSpiffeID(ctx context.Context, spiffeI
 		preexisting = true
 	} else {
 		// Create new entry
-		response, err := r.c.R.CreateEntryIfNotExists(ctx, entry)
+		response, err := r.c.R.BatchCreateEntry(ctx, &entry.BatchCreateEntryRequest{
+			Entries: []*types.Entry{protoEntry},
+		})
 		if err != nil {
 			return nil, false, err
 		}
-		existing = response.Entry
-		entryID = response.Entry.EntryId
-		preexisting = response.Preexisting
+		existing = response.Results[0].Entry
+		entryID = response.Results[0].Entry.Id
+		preexisting = codes.Code(response.Results[0].Status.Code) == codes.AlreadyExists
 	}
 
 	if preexisting {
-		if !equalSpiffeID(existing, entry) {
-			entry.EntryId = entryID
-			_, err := r.c.R.UpdateEntry(ctx, &registration.UpdateEntryRequest{
-				Entry: entry,
+		if !equalSpiffeID(existing, protoEntry) {
+			protoEntry.Id = entryID
+			_, err := r.c.R.BatchUpdateEntry(ctx, &entry.BatchUpdateEntryRequest{
+				Entries: []*types.Entry{protoEntry},
 			})
 			if err != nil {
 				return nil, false, err
@@ -228,9 +234,11 @@ func (r *SpiffeIDReconciler) deleteSpiffeID(ctx context.Context, spiffeID *spiff
 }
 
 // equalSpiffeID checks if the current SPIRE Server registration entry and SPIFFE ID resource are equal
-func equalSpiffeID(existing, current *common.RegistrationEntry) bool {
-	existingSet := selector.NewSetFromRaw(existing.Selectors)
-	currentSet := selector.NewSetFromRaw(current.Selectors)
+func equalSpiffeID(existing, current *types.Entry) bool {
+	existingSelectors, _ := api.SelectorsFromProto(existing.Selectors)
+	currentSelectors, _ := api.SelectorsFromProto(current.Selectors)
+	existingSet := selector.NewSetFromRaw(existingSelectors)
+	currentSet := selector.NewSetFromRaw(currentSelectors)
 
 	return equalStringSlice(existing.DnsNames, current.DnsNames) &&
 		existingSet.Equal(currentSet) &&

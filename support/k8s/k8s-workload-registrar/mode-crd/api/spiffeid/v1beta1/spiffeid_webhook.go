@@ -22,8 +22,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/spire/pkg/common/x509util"
-	"github.com/spiffe/spire/proto/spire/api/registration"
+	"github.com/spiffe/spire/proto/spire/api/server/entry/v1"
 	"github.com/spiffe/spire/proto/spire/common"
+	"github.com/spiffe/spire/proto/spire/types"
 	"github.com/zeebo/errs"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -36,7 +37,7 @@ type SpiffeIDWebhookConfig struct {
 	Log         logrus.FieldLogger
 	Mgr         ctrl.Manager
 	Namespace   string
-	R           registration.RegistrationClient
+	R           entry.EntryClient
 	TrustDomain string
 }
 
@@ -58,8 +59,10 @@ func (s *SpiffeID) ValidateCreate() error {
 	}
 
 	// Check for duplicates
-	registrationEntries, err := c.R.ListBySelectors(c.Ctx, &common.Selectors{
-		Entries: s.CommonSelector(),
+	registrationEntries, err := c.R.ListEntries(c.Ctx, &entry.ListEntriesRequest{
+		Filter: &entry.ListEntriesRequest_Filter{
+			BySelectors:  &types.SelectorMatch{},
+		},
 	})
 	if err != nil {
 		return err

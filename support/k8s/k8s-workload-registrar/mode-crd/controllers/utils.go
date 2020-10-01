@@ -21,7 +21,7 @@ import (
 	"net/url"
 	"path"
 
-	"github.com/spiffe/spire/proto/spire/api/registration"
+	"github.com/spiffe/spire/proto/spire/api/server/entry/v1"
 	spiffeidv1beta1 "github.com/spiffe/spire/support/k8s/k8s-workload-registrar/mode-crd/api/spiffeid/v1beta1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -73,20 +73,20 @@ func setOwnerRef(owner metav1.Object, spiffeID *spiffeidv1beta1.SpiffeID, scheme
 }
 
 // deleteRegistrationEntry deletes an entry on the SPIRE Server
-func deleteRegistrationEntry(ctx context.Context, r registration.RegistrationClient, entryID string) error {
-	_, err := r.DeleteEntry(ctx, &registration.RegistrationEntryID{Id: entryID})
-	switch status.Code(err) {
-	case codes.OK, codes.NotFound:
-		return nil
-	case codes.Internal:
-		// Spire server currently returns a 500 if delete fails due to the entry not existing.
-		// We work around it by attempting to fetch the entry, and if it's not found then all is good.
-		_, err := r.FetchEntry(ctx, &registration.RegistrationEntryID{Id: entryID})
+func deleteRegistrationEntry(ctx context.Context, r entry.EntryClient, entryID string) error {
+	response, err := r.BatchDeleteEntry(ctx, &entry.BatchDeleteEntryRequest{Ids: []string{entryID}})
+	if err != nil {
+		return err
+	}
+
+	result := response.Results[0]
+	err = status.Error(codes.Code(result.Status.Code), result.Status.Message)
+	if err != nil {
 		if status.Code(err) == codes.NotFound {
 			return nil
+		} else {
+			return err
 		}
-
-		return err
 	}
 
 	return nil
