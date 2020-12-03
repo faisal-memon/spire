@@ -184,5 +184,5 @@ func (r *PodReconciler) podSpiffeID(pod *corev1.Pod) string {
 }
 
 func (r *PodReconciler) podParentID(nodeName string) string {
-	return makeID(r.c.TrustDomain, "k8s-workload-registrar/%s/node/%s", r.c.Cluster, nodeName)
+	return makeID(r.c.TrustDomain, "k8s-workload-registrar/%s/node", r.c.Cluster)
 }

@@ -101,8 +101,8 @@ func (n *NodeReconciler) updateorCreateNodeEntry(ctx context.Context, node *core
 			ParentId: idutil.ServerID(trustDomain).String(),
 			SpiffeId: n.nodeID(node.ObjectMeta.Name),
 			Selector: spiffeidv1beta1.Selector{
-				Cluster:      n.c.Cluster,
-				AgentNodeUid: node.ObjectMeta.UID,
+				SatCluster:      n.c.Cluster,
+				// AgentNodeUid: node.ObjectMeta.UID,
 			},
 		},
 	}
@@ -131,5 +131,5 @@ func (n *NodeReconciler) updateorCreateNodeEntry(ctx context.Context, node *core
 }
 
 func (n *NodeReconciler) nodeID(nodeName string) string {
-	return makeID(n.c.TrustDomain, "k8s-workload-registrar/%s/node/%s", n.c.Cluster, nodeName)
+	return makeID(n.c.TrustDomain, "k8s-workload-registrar/%s/node", n.c.Cluster)
 }

@@ -23,6 +23,7 @@ import (
 type Selector struct {
 	// Cluster is the k8s_psat cluster
 	Cluster string `json:"cluster,omitempty"`
+	SatCluster string `json:"sat_cluster,omitempty"`
 	// AgentNodeUid is the UID Of the node
 	AgentNodeUid types.UID `json:"agent_node_uid,omitempty"`
 	// Pod label name/value to match for this spiffe ID

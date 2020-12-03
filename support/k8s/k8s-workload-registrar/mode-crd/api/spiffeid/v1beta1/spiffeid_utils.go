@@ -31,6 +31,12 @@ func (s *SpiffeID) TypesSelector() []*types.Selector {
 			Value: fmt.Sprintf("cluster:%s", s.Spec.Selector.Cluster),
 		})
 	}
+	if len(s.Spec.Selector.SatCluster) > 0 {
+		commonSelector = append(commonSelector, &common.Selector{
+			Type:  "k8s_sat",
+			Value: fmt.Sprintf("cluster:%s", s.Spec.Selector.SatCluster),
+		})
+	}
 	if len(s.Spec.Selector.AgentNodeUid) > 0 {
 		commonSelector = append(commonSelector, &types.Selector{
 			Type:  "k8s_psat",
