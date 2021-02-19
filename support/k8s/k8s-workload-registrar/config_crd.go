@@ -14,6 +14,7 @@ import (
 
 const (
 	defaultAddSvcDNSName   = true
+	defaultAttestor        = "k8s_psat"
 	defaultPodController   = true
 	defaultMetricsBindAddr = ":8080"
 	defaultWebhookCertDir  = "/run/spire/serving-certs"
@@ -24,6 +25,7 @@ const (
 type CRDMode struct {
 	CommonMode
 	AddSvcDNSName   bool   `hcl:"add_svc_dns_name"`
+	Attestor        string `hcl:"attestor"`
 	LeaderElection  bool   `hcl:"leader_election"`
 	MetricsBindAddr string `hcl:"metrics_bind_addr"`
 	PodController   bool   `hcl:"pod_controller"`
@@ -37,6 +39,10 @@ func (c *CRDMode) ParseConfig(hclConfig string) error {
 	c.AddSvcDNSName = defaultAddSvcDNSName
 	if err := hcl.Decode(c, hclConfig); err != nil {
 		return errs.New("unable to decode configuration: %v", err)
+	}
+
+	if c.Attestor == "" {
+		c.Attestor = defaultAttestor
 	}
 
 	if c.MetricsBindAddr == "" {
@@ -63,7 +69,7 @@ func (c *CRDMode) Run(ctx context.Context) error {
 
 	entryClient, err := c.EntryClient(ctx, log)
 	if err != nil {
-		return errs.New("failed to dial server: %v", err)
+		return errs.New("failed to create entry client: %v", err)
 	}
 
 	mgr, err := controllers.NewManager(c.LeaderElection, c.MetricsBindAddr, c.WebhookCertDir, c.WebhookPort)
@@ -78,13 +84,14 @@ func (c *CRDMode) Run(ctx context.Context) error {
 
 	log.Info("Initializing SPIFFE ID CRD Mode")
 	err = controllers.NewSpiffeIDReconciler(controllers.SpiffeIDReconcilerConfig{
+		Attestor:    c.Attestor,
 		Client:      mgr.GetClient(),
 		Cluster:     c.Cluster,
 		Ctx:         ctx,
 		Log:         log,
 		E:           entryClient,
 		TrustDomain: c.TrustDomain,
-	}).SetupWithManager(mgr)
+	}).SetupWithManager(ctx, mgr)
 	if err != nil {
 		return err
 	}
@@ -104,19 +111,13 @@ func (c *CRDMode) Run(ctx context.Context) error {
 	}
 
 	if c.PodController {
-		err = controllers.NewNodeReconciler(controllers.NodeReconcilerConfig{
-			Client:      mgr.GetClient(),
-			Cluster:     c.Cluster,
-			Ctx:         ctx,
-			Log:         log,
-			Namespace:   myNamespace,
-			Scheme:      mgr.GetScheme(),
-			TrustDomain: c.TrustDomain,
-		}).SetupWithManager(mgr)
+		agentClient, err := c.AgentClient(ctx, log)
 		if err != nil {
-			return err
+			return errs.New("failed to create agent client: %v", err)
 		}
 		err = controllers.NewPodReconciler(controllers.PodReconcilerConfig{
+			A:                  agentClient,
+			Attestor:           c.Attestor,
 			Client:             mgr.GetClient(),
 			Cluster:            c.Cluster,
 			Ctx:                ctx,

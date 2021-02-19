@@ -17,8 +17,11 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/sirupsen/logrus"
+	agentv1 "github.com/spiffe/spire/proto/spire/api/server/agent/v1"
+	spiretypes "github.com/spiffe/spire/proto/spire/types"
 	spiffeidv1beta1 "github.com/spiffe/spire/support/k8s/k8s-workload-registrar/mode-crd/api/spiffeid/v1beta1"
 
 	corev1 "k8s.io/api/core/v1"
@@ -32,6 +35,8 @@ import (
 
 // PodReconcilerConfig holds the config passed in when creating the reconciler
 type PodReconcilerConfig struct {
+	A                  agentv1.AgentClient
+	Attestor           string
 	Client             client.Client
 	Cluster            string
 	Ctx                context.Context
@@ -98,6 +103,11 @@ func (r *PodReconciler) updateorCreatePodEntry(ctx context.Context, pod *corev1.
 		return ctrl.Result{}, nil
 	}
 
+	parentIDURI, err := r.podParentID(ctx, pod.Spec.NodeName)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	// Set up new SPIFFE ID
 	spiffeID := &spiffeidv1beta1.SpiffeID{
 		ObjectMeta: metav1.ObjectMeta{
@@ -109,7 +119,7 @@ func (r *PodReconciler) updateorCreatePodEntry(ctx context.Context, pod *corev1.
 		},
 		Spec: spiffeidv1beta1.SpiffeIDSpec{
 			SpiffeId: spiffeIDURI,
-			ParentId: r.podParentID(pod.Spec.NodeName),
+			ParentId: parentIDURI,
 			DnsNames: []string{pod.Name}, // Set pod name as first DNS name
 			Selector: spiffeidv1beta1.Selector{
 				PodUid:    pod.GetUID(),
@@ -118,7 +128,7 @@ func (r *PodReconciler) updateorCreatePodEntry(ctx context.Context, pod *corev1.
 			},
 		},
 	}
-	err := setOwnerRef(pod, spiffeID, r.c.Scheme)
+	err = setOwnerRef(pod, spiffeID, r.c.Scheme)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -183,6 +193,49 @@ func (r *PodReconciler) podSpiffeID(pod *corev1.Pod) string {
 	return makeID(r.c.TrustDomain, "ns/%s/sa/%s", pod.Namespace, pod.Spec.ServiceAccountName)
 }
 
-func (r *PodReconciler) podParentID(nodeName string) string {
-	return makeID(r.c.TrustDomain, "k8s-workload-registrar/%s/node", r.c.Cluster)
+func (r *PodReconciler) podParentID(ctx context.Context, nodeName string) (string, error) {
+	switch r.c.Attestor {
+	case "k8s_psat":
+		return r.psatPodParentID(ctx, nodeName)
+	case "k8s_sat":
+		return r.satPodParentID()
+	default:
+		return "", fmt.Errorf("unknown Attestor type: %s", r.c.Attestor)
+	}
+}
+
+func (r *PodReconciler) psatPodParentID(ctx context.Context, nodeName string) (string, error) {
+	resp, err := r.c.A.ListAgents(ctx, &agentv1.ListAgentsRequest{
+		Filter: &agentv1.ListAgentsRequest_Filter{
+			ByAttestationType: r.c.Attestor,
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	agents := selectorMatchSuperset(resp.Agents, &spiretypes.Selector{
+		Type:  "k8s_psat",
+		Value: fmt.Sprintf("agent_node_name:%s", nodeName),
+	})
+	if len(agents) != 1 {
+		return "", fmt.Errorf("one agent is expected, received %d", len(agents))
+	}
+	return makeID(agents[0].Id.TrustDomain, agents[0].Id.Path), nil
+}
+
+func (r *PodReconciler) satPodParentID() (string, error) {
+	return makeID(r.c.TrustDomain, "/k8s-workload-registrar/%s/node", r.c.Cluster), nil
+}
+
+func selectorMatchSuperset(agents []*spiretypes.Agent, selector *spiretypes.Selector) []*spiretypes.Agent {
+	var supersetAgents []*spiretypes.Agent
+	for _, agent := range agents {
+		for _, agentSelector := range agent.Selectors {
+			if agentSelector.Type == selector.Type && agentSelector.Value == selector.Value {
+				supersetAgents = append(supersetAgents, agent)
+				break
+			}
+		}
+	}
+	return supersetAgents
 }

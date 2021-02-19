@@ -18,6 +18,8 @@ package controllers
 import (
 	"context"
 	"errors"
+	"fmt"
+	"path"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
@@ -36,11 +38,12 @@ import (
 
 // SpiffeIDReconcilerConfig holds the config passed in when creating the reconciler
 type SpiffeIDReconcilerConfig struct {
+	Attestor    string
 	Client      client.Client
 	Cluster     string
 	Ctx         context.Context
-	Log         logrus.FieldLogger
 	E           entryv1.EntryClient
+	Log         logrus.FieldLogger
 	TrustDomain string
 }
 
@@ -59,7 +62,13 @@ func NewSpiffeIDReconciler(config SpiffeIDReconcilerConfig) *SpiffeIDReconciler 
 }
 
 // SetupWithManager adds a controller manager to manage this reconciler
-func (r *SpiffeIDReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *SpiffeIDReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
+	if r.c.Attestor == "k8s_sat" {
+		err := r.createSatParentID(ctx)
+		if err != nil {
+			return err
+		}
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&spiffeidv1beta1.SpiffeID{}).
 		Complete(r)
@@ -267,6 +276,47 @@ func (r *SpiffeIDReconciler) updateEntry(ctx context.Context, entry *types.Entry
 	return errorFromStatus(resp.Results[0].Status)
 }
 
+func (r *SpiffeIDReconciler) createSatParentID(ctx context.Context) error {
+	resp, err := r.c.E.BatchCreateEntry(ctx, &entryv1.BatchCreateEntryRequest{
+		Entries: []*types.Entry{
+			{
+				ParentId: serverID(r.c.TrustDomain),
+				SpiffeId: r.makeID("/k8s-workload-registrar/%s/node", r.c.Cluster),
+				Selectors: []*types.Selector{
+					{Type: "k8s_sat", Value: fmt.Sprintf("cluster:%s", r.c.Cluster)},
+				},
+			},
+		},
+	})
+	if err != nil {
+		r.c.Log.WithError(err).Error("Failed to create sat parent entry")
+		return err
+	}
+
+	// These checks are purely defensive.
+	switch {
+	case len(resp.Results) > 1:
+		return errors.New("batch create response has too many results")
+	case len(resp.Results) < 1:
+		return errors.New("batch create response result empty")
+	}
+
+	err = errorFromStatus(resp.Results[0].Status)
+	switch status.Code(err) {
+	case codes.OK, codes.AlreadyExists:
+		return nil
+	default:
+		return err
+	}
+}
+
+func (r *SpiffeIDReconciler) makeID(pathFmt string, pathArgs ...interface{}) *types.SPIFFEID {
+	return &types.SPIFFEID{
+		TrustDomain: r.c.TrustDomain,
+		Path:        path.Clean("/" + fmt.Sprintf(pathFmt, pathArgs...)),
+	}
+}
+
 func errorFromStatus(s *types.Status) error {
 	if s == nil {
 		return errors.New("result status is unexpectedly nil")
@@ -328,4 +378,12 @@ func selectorSetsEqual(as, bs []*types.Selector) bool {
 		}
 	}
 	return true
+}
+
+// serverID creates a server SPIFFE ID string given a trustDomain.
+func serverID(trustDomain string) *types.SPIFFEID {
+	return &types.SPIFFEID{
+		TrustDomain: trustDomain,
+		Path:        path.Join("/", "spire", "server"),
+	}
 }

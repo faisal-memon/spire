@@ -9,6 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/spiffe/go-spiffe/v2/logger"
+	"github.com/spiffe/spire/proto/spire/api/server/agent/v1"
 	"github.com/spiffe/spire/proto/spire/api/server/entry/v1"
 
 	"github.com/hashicorp/hcl"
@@ -101,6 +102,10 @@ func (c *CommonMode) EntryClient(ctx context.Context, dialLogger logger.Logger) 
 	return c.serverAPI.EntryClient(ctx, dialLogger, c.ServerAddress, c.AgentSocketPath)
 }
 
+func (c *CommonMode) AgentClient(ctx context.Context, dialLogger logger.Logger) (agent.AgentClient, error) {
+	return c.serverAPI.AgentClient(ctx, dialLogger, c.ServerAddress, c.AgentSocketPath)
+}
+
 func (c *CommonMode) Close() error {
 	return c.serverAPI.Close()
 }
@@ -177,6 +182,15 @@ func (r *ServerAPIClients) EntryClient(ctx context.Context, dialLog logger.Logge
 		}
 	}
 	return entry.NewEntryClient(r.serverConn), nil
+}
+
+func (r *ServerAPIClients) AgentClient(ctx context.Context, dialLog logger.Logger, serverAddress string, agentSocketPath string) (agent.AgentClient, error) {
+	if r.serverConn == nil {
+		if err := r.dial(ctx, dialLog, serverAddress, agentSocketPath); err != nil {
+			return nil, err
+		}
+	}
+	return agent.NewAgentClient(r.serverConn), nil
 }
 
 func (r *ServerAPIClients) Close() error {
