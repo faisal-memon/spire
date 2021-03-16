@@ -17,6 +17,8 @@ package controllers
 
 import (
 	"context"
+	// "fmt"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	spiffeidv1beta1 "github.com/spiffe/spire/support/k8s/k8s-workload-registrar/mode-crd/api/spiffeid/v1beta1"
@@ -40,6 +42,7 @@ type PodReconcilerConfig struct {
 	PodLabel           string
 	PodAnnotation      string
 	Scheme             *runtime.Scheme
+	SANAnnotation      string
 	TrustDomain        string
 }
 
@@ -117,6 +120,13 @@ func (r *PodReconciler) updateorCreatePodEntry(ctx context.Context, pod *corev1.
 				NodeName:  pod.Spec.NodeName,
 			},
 		},
+	}
+	if r.c.SANAnnotation != "" {
+		AdditionalSANS := pod.ObjectMeta.Annotations[r.c.SANAnnotation]
+		// fmt.Printf("SANS: %s\n", AdditionalSANS)
+		if AdditionalSANS != "" {
+			spiffeID.Spec.DnsNames = append(spiffeID.Spec.DnsNames, strings.Split(AdditionalSANS, ",")...)
+		}
 	}
 	err := setOwnerRef(pod, spiffeID, r.c.Scheme)
 	if err != nil {

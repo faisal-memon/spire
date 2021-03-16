@@ -27,6 +27,7 @@ type CRDMode struct {
 	LeaderElection  bool   `hcl:"leader_election"`
 	MetricsBindAddr string `hcl:"metrics_bind_addr"`
 	PodController   bool   `hcl:"pod_controller"`
+	SANAnnotation   string `hcl:"san_annotation"`
 	WebhookEnabled  bool   `hcl:"webhook_enabled"`
 	WebhookCertDir  string `hcl:"webhook_cert_dir"`
 	WebhookPort     int    `hcl:"webhook_port"`
@@ -124,6 +125,7 @@ func (c *CRDMode) Run(ctx context.Context) error {
 			Log:                log,
 			PodLabel:           c.PodLabel,
 			PodAnnotation:      c.PodAnnotation,
+			SANAnnotation:      c.SANAnnotation,
 			Scheme:             mgr.GetScheme(),
 			TrustDomain:        c.TrustDomain,
 		}).SetupWithManager(mgr)
