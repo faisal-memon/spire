@@ -3,6 +3,7 @@ package cache
 import (
 	"crypto"
 	"crypto/x509"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -388,6 +389,7 @@ func (c *Cache) UpdateSVIDs(update *UpdateSVIDs) {
 	// Allocate a set of selectors that
 	notifySet, selSetDone := allocSelectorSet()
 	defer selSetDone()
+	fmt.Printf("notifySet 1: %v\n", notifySet)
 
 	// Add/update records for registration entries in the update
 	for entryID, svid := range update.X509SVIDs {
@@ -399,6 +401,7 @@ func (c *Cache) UpdateSVIDs(update *UpdateSVIDs) {
 
 		record.svid = svid
 		notifySet.Merge(record.entry.Selectors...)
+		fmt.Printf("Selectors: %v", record.entry.Selectors)
 		log := c.log.WithFields(logrus.Fields{
 			telemetry.Entry:    record.entry.EntryId,
 			telemetry.SPIFFEID: record.entry.SpiffeId,
@@ -409,6 +412,7 @@ func (c *Cache) UpdateSVIDs(update *UpdateSVIDs) {
 		delete(c.staleEntries, entryID)
 	}
 
+	fmt.Printf("notifySet 2: %v\n", notifySet)
 	c.notifyBySelectors(notifySet)
 }
 

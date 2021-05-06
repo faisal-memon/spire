@@ -329,6 +329,56 @@ func TestSubscriberNotifiedOnSVIDChanges(t *testing.T) {
 	})
 }
 
+func TestSubscriberNotNotifiedOnDifferentSVIDChanges(t *testing.T) {
+	cache := newTestCache()
+
+	foo := makeRegistrationEntry("FOO", "A")
+	bar := makeRegistrationEntry("BAR", "B")
+	cache.UpdateEntries(&UpdateEntries{
+		Bundles:             makeBundles(bundleV1),
+		RegistrationEntries: makeRegistrationEntries(foo, bar),
+	}, nil)
+	cache.UpdateSVIDs(&UpdateSVIDs{
+		X509SVIDs: makeX509SVIDs(foo, bar),
+	})
+
+	sub := cache.SubscribeToWorkloadUpdates(makeSelectors("A"))
+	defer sub.Finish()
+	assertAnyWorkloadUpdate(t, sub)
+
+	// Update SVID
+	cache.UpdateSVIDs(&UpdateSVIDs{
+		X509SVIDs: makeX509SVIDs(bar),
+	})
+
+	assertNoWorkloadUpdate(t, sub)
+}
+
+func TestSubscriberNotNotifiedOnOverlappingSVIDChanges(t *testing.T) {
+	cache := newTestCache()
+
+	foo := makeRegistrationEntry("FOO", "A")
+	bar := makeRegistrationEntry("BAR", "A", "B")
+	cache.UpdateEntries(&UpdateEntries{
+		Bundles:             makeBundles(bundleV1),
+		RegistrationEntries: makeRegistrationEntries(foo, bar),
+	}, nil)
+	cache.UpdateSVIDs(&UpdateSVIDs{
+		X509SVIDs: makeX509SVIDs(foo, bar),
+	})
+
+	sub := cache.SubscribeToWorkloadUpdates(makeSelectors("A"))
+	defer sub.Finish()
+	assertAnyWorkloadUpdate(t, sub)
+
+	// Update SVID
+	cache.UpdateSVIDs(&UpdateSVIDs{
+		X509SVIDs: makeX509SVIDs(bar),
+	})
+
+	assertNoWorkloadUpdate(t, sub)
+}
+
 func TestSubcriberNotificationsOnSelectorChanges(t *testing.T) {
 	cache := newTestCache()
 
