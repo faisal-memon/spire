@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/spiffe/spire/proto/spire/common"
+	commonselector"github.com/spiffe/spire/pkg/common/selector"
 )
 
 var (
@@ -21,7 +22,7 @@ var (
 
 	selectorSetPool = sync.Pool{
 		New: func() interface{} {
-			return make(selectorSet)
+			return commonselector.NewSet()
 		},
 	}
 
@@ -74,23 +75,25 @@ func clearSubscriberSet(set subscriberSet) {
 }
 
 // unique set of selectors, allocated from a pool
-type selector struct {
+/*type selector struct {
 	Type  string
 	Value string
-}
+}*/
+//type selector commonselector.Selector
 
-func makeSelector(s *common.Selector) selector {
-	return selector{
+func makeSelector(s *common.Selector) commonselector.Selector {
+	return commonselector.Selector{
 		Type:  s.Type,
 		Value: s.Value,
 	}
 }
 
-type selectorSet map[selector]struct{}
+//type selectorSet map[selector]struct{}
+type selectorSet commonselector.Set
 
-func allocSelectorSet(ss ...*common.Selector) (selectorSet, func()) {
+func allocSelectorSet(ss []*common.Selector) (selectorSet, func()) {
 	set := selectorSetPool.Get().(selectorSet)
-	set.Merge(ss...)
+	MergeSelectors(set, ss)
 	return set, func() {
 		clearSelectorSet(set)
 		selectorSetPool.Put(set)
@@ -98,31 +101,31 @@ func allocSelectorSet(ss ...*common.Selector) (selectorSet, func()) {
 }
 
 func clearSelectorSet(set selectorSet) {
-	for k := range set {
-		delete(set, k)
+	for _, s := range set.Array() {
+		set.Remove(s)
 	}
 }
 
-func (set selectorSet) Merge(ss ...*common.Selector) {
+func MergeSelectors(set selectorSet, ss []*common.Selector) {
 	for _, s := range ss {
-		set[makeSelector(s)] = struct{}{}
+		set.Add(commonselector.New(s))
 	}
 }
 
-func (set selectorSet) MergeSet(other selectorSet) {
-	for s := range other {
-		set[s] = struct{}{}
+func MergeSelectorSet(set, other selectorSet) {
+	for _, s := range other.Array() {
+		set.Add(s)
 	}
 }
 
-func (set selectorSet) In(ss ...*common.Selector) bool {
+/*func (set selectorSet) In(ss ...*common.Selector) bool {
 	for _, s := range ss {
 		if _, ok := set[makeSelector(s)]; !ok {
 			return false
 		}
 	}
 	return true
-}
+}*/
 
 // unique set of cache records, allocated from a pool
 type recordSet map[*cacheRecord]struct{}

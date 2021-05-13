@@ -11,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/spire/pkg/common/bundleutil"
+	commonselector"github.com/spiffe/spire/pkg/common/selector"
 	"github.com/spiffe/spire/pkg/common/telemetry"
 	"github.com/spiffe/spire/proto/spire/common"
 )
@@ -112,7 +113,7 @@ type Cache struct {
 	records map[string]*cacheRecord
 
 	// selectors holds the selector indices, keyed by a selector key
-	selectors map[selector]*selectorIndex
+	selectors map[selectorSet]*selectorIndex
 
 	// staleEntries holds stale registration entries
 	staleEntries map[string]bool
@@ -138,7 +139,7 @@ func New(log logrus.FieldLogger, trustDomain spiffeid.TrustDomain, bundle *Bundl
 		metrics:      metrics,
 		trustDomain:  trustDomain,
 		records:      make(map[string]*cacheRecord),
-		selectors:    make(map[selector]*selectorIndex),
+		selectors:    make(map[selectorSet]*selectorIndex),
 		staleEntries: make(map[string]bool),
 		bundles: map[spiffeid.TrustDomain]*bundleutil.Bundle{
 			trustDomain: bundle,
@@ -183,7 +184,7 @@ func (c *Cache) CountSVIDs() int {
 }
 
 func (c *Cache) MatchingIdentities(selectors []*common.Selector) []Identity {
-	set, setDone := allocSelectorSet(selectors...)
+	set, setDone := allocSelectorSet(selectors)
 	defer setDone()
 
 	c.mu.RLock()
@@ -192,7 +193,7 @@ func (c *Cache) MatchingIdentities(selectors []*common.Selector) []Identity {
 }
 
 func (c *Cache) FetchWorkloadUpdate(selectors []*common.Selector) *WorkloadUpdate {
-	set, setDone := allocSelectorSet(selectors...)
+	set, setDone := allocSelectorSet(selectors)
 	defer setDone()
 
 	c.mu.RLock()
@@ -205,9 +206,7 @@ func (c *Cache) SubscribeToWorkloadUpdates(selectors []*common.Selector) Subscri
 	defer c.mu.Unlock()
 
 	sub := newSubscriber(c, selectors)
-	for s := range sub.set {
-		c.addSelectorIndexSub(s, sub)
-	}
+	c.addSelectorIndexSub(sub)
 	c.notify(sub)
 	return sub
 }
@@ -254,16 +253,16 @@ func (c *Cache) UpdateEntries(update *UpdateEntries, checkSVID func(*common.Regi
 	trustDomainBundleChanged := bundleChanged[c.trustDomain]
 
 	// Allocate a set of selectors that
-	notifySet, selSetDone := allocSelectorSet()
+	notifySet, selSetDone := allocSelectorSet([]*common.Selector{})
 	defer selSetDone()
 
 	// Allocate sets from the pool to track changes to selectors and
 	// federatesWith declarations. These sets must be cleared after EACH use
 	// and returned to their respective pools when done processing the
 	// updates.
-	selAdd, selAddDone := allocSelectorSet()
+	selAdd, selAddDone := allocSelectorSet([]*common.Selector{})
 	defer selAddDone()
-	selRem, selRemDone := allocSelectorSet()
+	selRem, selRemDone := allocSelectorSet([]*common.Selector{})
 	defer selRemDone()
 	fedAdd, fedAddDone := allocStringSet()
 	defer fedAddDone()
@@ -282,9 +281,9 @@ func (c *Cache) UpdateEntries(update *UpdateEntries, checkSVID func(*common.Regi
 			// record for each selector index, and add the entry selectors to
 			// the notify set.
 			clearSelectorSet(selRem)
-			selRem.Merge(record.entry.Selectors...)
+			MergeSelectors(selRem, record.entry.Selectors)
 			c.delSelectorIndicesRecord(selRem, record)
-			notifySet.MergeSet(selRem)
+			MergeSelectorSet(notifySet, selRem)
 			delete(c.records, id)
 			// Remove stale entry since, registration entry is no longer on cache.
 			delete(c.staleEntries, id)
@@ -306,8 +305,8 @@ func (c *Cache) UpdateEntries(update *UpdateEntries, checkSVID func(*common.Regi
 		c.diffSelectors(existingEntry, newEntry, selAdd, selRem)
 		c.addSelectorIndicesRecord(selAdd, record)
 		c.delSelectorIndicesRecord(selRem, record)
-		notifySet.MergeSet(selAdd)
-		notifySet.MergeSet(selRem)
+		MergeSelectorSet(notifySet, selAdd)
+		MergeSelectorSet(notifySet, selRem)
 
 		// Determine if there were changes to FederatesWith declarations or
 		// if any federated bundles related to the entry were updated.
@@ -334,7 +333,7 @@ func (c *Cache) UpdateEntries(update *UpdateEntries, checkSVID func(*common.Regi
 		// selectors and if so, make sure subscribers for all entry selectors
 		// are notified.
 		if federatedBundlesChanged {
-			notifySet.Merge(newEntry.Selectors...)
+			MergeSelectors(notifySet, newEntry.Selectors)
 		}
 
 		// Invoke the svid checker callback for this record
@@ -346,16 +345,16 @@ func (c *Cache) UpdateEntries(update *UpdateEntries, checkSVID func(*common.Regi
 		//
 		// TODO: This is a bit verbose and could be trimmed in the future
 		// when the cache implementation has stabilized.
-		if len(selAdd) > 0 || len(selRem) > 0 || len(fedAdd) > 0 || len(fedRem) > 0 {
+		if selAdd.Size() > 0 || selRem.Size() > 0 || len(fedAdd) > 0 || len(fedRem) > 0 {
 			log := c.log.WithFields(logrus.Fields{
 				telemetry.Entry:    newEntry.EntryId,
 				telemetry.SPIFFEID: newEntry.SpiffeId,
 			})
-			if len(selAdd) > 0 {
-				log = log.WithField(telemetry.SelectorsAdded, len(selAdd))
+			if selAdd.Size() > 0 {
+				log = log.WithField(telemetry.SelectorsAdded, selAdd.Size())
 			}
-			if len(selRem) > 0 {
-				log = log.WithField(telemetry.SelectorsRemoved, len(selRem))
+			if selRem.Size() > 0 {
+				log = log.WithField(telemetry.SelectorsRemoved, selRem.Size())
 			}
 			if len(fedAdd) > 0 {
 				log = log.WithField(telemetry.FederatedAdded, len(fedAdd))
@@ -387,7 +386,7 @@ func (c *Cache) UpdateSVIDs(update *UpdateSVIDs) {
 	defer c.mu.Unlock()
 
 	// Allocate a set of selectors that
-	notifySet, selSetDone := allocSelectorSet()
+	notifySet, selSetDone := allocSelectorSet([]*common.Selector{})
 	defer selSetDone()
 	fmt.Printf("notifySet 1: %v\n", notifySet)
 
@@ -400,7 +399,7 @@ func (c *Cache) UpdateSVIDs(update *UpdateSVIDs) {
 		}
 
 		record.svid = svid
-		notifySet.Merge(record.entry.Selectors...)
+		MergeSelectors(notifySet, record.entry.Selectors)
 		fmt.Printf("Selectors: %v", record.entry.Selectors)
 		log := c.log.WithFields(logrus.Fields{
 			telemetry.Entry:    record.entry.EntryId,
@@ -460,19 +459,19 @@ func (c *Cache) updateOrCreateRecord(newEntry *common.RegistrationEntry) (*cache
 func (c *Cache) diffSelectors(existingEntry, newEntry *common.RegistrationEntry, added, removed selectorSet) {
 	// Make a set of all the selectors being added
 	if newEntry != nil {
-		added.Merge(newEntry.Selectors...)
+		MergeSelectors(added, newEntry.Selectors)
 	}
 
 	// Make a set of all the selectors that are being removed
 	if existingEntry != nil {
 		for _, selector := range existingEntry.Selectors {
 			s := makeSelector(selector)
-			if _, ok := added[s]; ok {
+			if added.Includes(&s) {
 				// selector already exists in entry
-				delete(added, s)
+				added.Remove(&s)
 			} else {
 				// selector has been removed from entry
-				removed[s] = struct{}{}
+				removed.Add(&s)
 			}
 		}
 	}
@@ -499,25 +498,22 @@ func (c *Cache) diffFederatesWith(existingEntry, newEntry *common.RegistrationEn
 }
 
 func (c *Cache) addSelectorIndicesRecord(selectors selectorSet, record *cacheRecord) {
-	for selector := range selectors {
-		c.addSelectorIndexRecord(selector, record)
-	}
+	c.addSelectorIndexRecord(selectors, record)
+
 }
 
-func (c *Cache) addSelectorIndexRecord(s selector, record *cacheRecord) {
+func (c *Cache) addSelectorIndexRecord(s selectorSet, record *cacheRecord) {
 	index := c.getSelectorIndex(s)
 	index.records[record] = struct{}{}
 }
 
 func (c *Cache) delSelectorIndicesRecord(selectors selectorSet, record *cacheRecord) {
-	for selector := range selectors {
-		c.delSelectorIndexRecord(selector, record)
-	}
+	c.delSelectorIndexRecord(selectors, record)
 }
 
 // delSelectorIndexRecord removes the record from the selector index. If
 // the selector index is empty afterwards, it is also removed.
-func (c *Cache) delSelectorIndexRecord(s selector, record *cacheRecord) {
+func (c *Cache) delSelectorIndexRecord(s selectorSet, record *cacheRecord) {
 	index, ok := c.selectors[s]
 	if ok {
 		delete(index.records, record)
@@ -527,19 +523,19 @@ func (c *Cache) delSelectorIndexRecord(s selector, record *cacheRecord) {
 	}
 }
 
-func (c *Cache) addSelectorIndexSub(s selector, sub *subscriber) {
-	index := c.getSelectorIndex(s)
+func (c *Cache) addSelectorIndexSub(sub *subscriber) {
+	index := c.getSelectorIndex(sub.set)
 	index.subs[sub] = struct{}{}
 }
 
 // delSelectorIndexSub removes the subscription from the selector index. If
 // the selector index is empty afterwards, it is also removed.
-func (c *Cache) delSelectorIndexSub(s selector, sub *subscriber) {
-	index, ok := c.selectors[s]
+func (c *Cache) delSelectorIndexSub(sub *subscriber) {
+	index, ok := c.selectors[sub.set]
 	if ok {
 		delete(index.subs, sub)
 		if index.isEmpty() {
-			delete(c.selectors, s)
+			delete(c.selectors, sub.set)
 		}
 	}
 }
@@ -547,9 +543,7 @@ func (c *Cache) delSelectorIndexSub(s selector, sub *subscriber) {
 func (c *Cache) unsubscribe(sub *subscriber) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for selector := range sub.set {
-		c.delSelectorIndexSub(selector, sub)
-	}
+	c.delSelectorIndexSub(sub)
 }
 
 func (c *Cache) notifyAll() {
@@ -585,11 +579,9 @@ func (c *Cache) allSubscribers() (subscriberSet, func()) {
 
 func (c *Cache) getSubscribers(set selectorSet) (subscriberSet, func()) {
 	subs, subsDone := allocSubscriberSet()
-	for s := range set {
-		index := c.getSelectorIndex(s)
-		for sub := range index.subs {
-			subs[sub] = struct{}{}
-		}
+	index := c.getSelectorIndex(set)
+	for sub := range index.subs {
+		subs[sub] = struct{}{}
 	}
 	return subs, subsDone
 }
@@ -652,21 +644,19 @@ func (c *Cache) getRecordsForSelectors(set selectorSet) (recordSet, func()) {
 	// that is a more expensive operation and we could easily have duplicate
 	// entries to check.
 	records, recordsDone := allocRecordSet()
-	for selector := range set {
-		index := c.getSelectorIndex(selector)
-		for record := range index.records {
-			if record.svid == nil {
-				continue
-			}
-			records[record] = struct{}{}
+	index := c.getSelectorIndex(set)
+	for record := range index.records {
+		if record.svid == nil {
+			continue
 		}
+		records[record] = struct{}{}
 	}
 
 	// Filter out records whose registration entry selectors are not within
 	// inside the selector set.
 	for record := range records {
 		for _, s := range record.entry.Selectors {
-			if !set.In(s) {
+			if !set.Includes(commonselector.New(s)) {
 				delete(records, record)
 			}
 		}
@@ -676,7 +666,7 @@ func (c *Cache) getRecordsForSelectors(set selectorSet) (recordSet, func()) {
 
 // getSelectorIndex gets the selector index for the selector. If one doesn't
 // exist, it is created.
-func (c *Cache) getSelectorIndex(s selector) *selectorIndex {
+func (c *Cache) getSelectorIndex(s selectorSet) *selectorIndex {
 	index, ok := c.selectors[s]
 	if !ok {
 		index = newSelectorIndex()

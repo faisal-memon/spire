@@ -22,7 +22,7 @@ type subscriber struct {
 }
 
 func newSubscriber(cache *Cache, selectors []*common.Selector) *subscriber {
-	set, setFree := allocSelectorSet(selectors...)
+	set, setFree := allocSelectorSet(selectors)
 	return &subscriber{
 		cache:   cache,
 		set:     set,
