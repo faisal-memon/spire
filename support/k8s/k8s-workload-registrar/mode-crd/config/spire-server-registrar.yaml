@@ -159,6 +159,7 @@ data:
     add_svc_dns_names = true
     mode = "crd"
     webhook_enabled = true
+    webhook_cert_dir = "/tmp/k8s-webhook-server/serving-certs"
     identity_template = "ns/{{.Pod.Namespace}}/pod/{{.Pod.Name}}"
     identity_template_label = "spiffe.io/spiffe-id"
 
@@ -211,7 +212,7 @@ spec:
       shareProcessNamespace: true
       containers:
         - name: spire-server
-          image: gcr.io/spiffe-io/spire-server:1.1.0
+          image: gcr.io/spiffe-io/spire-server:1.1.1
           args:
             - -config
             - /run/spire/config/server.conf
@@ -240,7 +241,7 @@ spec:
               mountPath: /tmp
               readOnly: false
         - name: k8s-workload-registrar
-          image: gcr.io/spiffe-io/k8s-workload-registrar:1.1.0
+          image: gcr.io/spiffe-io/k8s-workload-registrar:1.1.1
           args:
             - -config
             - /run/spire/config/k8s-workload-registrar.conf
@@ -257,9 +258,6 @@ spec:
             - mountPath: /run/spire/config
               name: k8s-workload-registrar-config
               readOnly: true
-            - mountPath: /run/spire/sockets
-              name: spire-agent-socket
-              readOnly: true
             - name: spire-registration-socket
               mountPath: /tmp
               readOnly: false
@@ -267,10 +265,6 @@ spec:
         - name: spire-config
           configMap:
             name: spire-server
-        - name: spire-agent-socket
-          hostPath:
-            path: /run/spire/sockets
-            type: DirectoryOrCreate
         - name: k8s-workload-registrar-config
           configMap:
             name: k8s-workload-registrar
