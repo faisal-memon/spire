@@ -5,7 +5,7 @@ go 1.17
 require (
 	cloud.google.com/go/secretmanager v1.3.0
 	cloud.google.com/go/security v1.3.0
-	cloud.google.com/go/storage v1.21.0
+	cloud.google.com/go/storage v1.22.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.22.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v0.13.2
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute v0.5.0
@@ -66,7 +66,7 @@ require (
 	golang.org/x/sys v0.0.0-20220328115105-d36c6a25d886
 	golang.org/x/time v0.0.0-20220224211638-0e9765cccd65
 	google.golang.org/api v0.74.0
-	google.golang.org/genproto v0.0.0-20220324131243-acbaeb5b85eb
+	google.golang.org/genproto v0.0.0-20220405205423-9d709892a2bf
 	google.golang.org/grpc v1.45.0
 	google.golang.org/protobuf v1.28.0
 	gopkg.in/square/go-jose.v2 v2.6.0
@@ -81,7 +81,7 @@ require (
 require (
 	cloud.google.com/go v0.100.2 // indirect
 	cloud.google.com/go/compute v1.5.0 // indirect
-	cloud.google.com/go/iam v0.1.1 // indirect
+	cloud.google.com/go/iam v0.3.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v0.9.1 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
 	github.com/Azure/go-autorest/autorest v0.11.18 // indirect
@@ -131,6 +131,7 @@ require (
 	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/google/uuid v1.1.2 // indirect
 	github.com/googleapis/gnostic v0.5.5 // indirect
+	github.com/googleapis/go-type-adapters v1.0.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
