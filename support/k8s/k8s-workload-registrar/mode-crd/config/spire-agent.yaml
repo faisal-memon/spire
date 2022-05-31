@@ -70,6 +70,11 @@ data:
         }
       }
 
+      SVIDStore "k8s_secret" {
+        plugin_data {
+        }
+      }
+
       WorkloadAttestor "k8s" {
         plugin_data {
             # Defaults to the secure kubelet port by default.
@@ -117,7 +122,8 @@ spec:
           args: ["-t", "30", "spire-server:8081"]
       containers:
         - name: spire-agent
-          image: gcr.io/spiffe-io/spire-agent:1.3.0
+          #image: gcr.io/spiffe-io/spire-agent:1.3.0
+          image: spire-agent:latest-local
           args: ["-config", "/run/spire/config/agent.conf"]
           volumeMounts:
             - name: spire-config
