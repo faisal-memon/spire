@@ -1160,8 +1160,10 @@ func TestBatchDeleteFederatedBundle(t *testing.T) {
 
 				switch tt.mode {
 				case bundlev1.BatchDeleteFederatedBundleRequest_RESTRICT:
+					require.NotNil(t, registrationEntry)
 					require.Equal(t, []string{td1.IDString()}, registrationEntry.FederatesWith)
 				case bundlev1.BatchDeleteFederatedBundleRequest_DISSOCIATE:
+					require.NotNil(t, registrationEntry)
 					require.Empty(t, registrationEntry.FederatesWith)
 				case bundlev1.BatchDeleteFederatedBundleRequest_DELETE:
 					require.Nil(t, registrationEntry)

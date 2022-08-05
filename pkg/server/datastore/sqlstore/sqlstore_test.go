@@ -1107,15 +1107,14 @@ func (s *PluginSuite) TestDeleteAttestedNode() {
 	}
 
 	// delete it before it exists
-	_, err := s.ds.DeleteAttestedNode(ctx, entry.SpiffeId)
+	err := s.ds.DeleteAttestedNode(ctx, entry.SpiffeId)
 	s.RequireGRPCStatus(err, codes.NotFound, _notFoundErrMsg)
 
 	_, err = s.ds.CreateAttestedNode(ctx, entry)
 	s.Require().NoError(err)
 
-	deletedNode, err := s.ds.DeleteAttestedNode(ctx, entry.SpiffeId)
+	err = s.ds.DeleteAttestedNode(ctx, entry.SpiffeId)
 	s.Require().NoError(err)
-	s.AssertProtoEqual(entry, deletedNode)
 
 	attestedNode, err := s.ds.FetchAttestedNode(ctx, entry.SpiffeId)
 	s.Require().NoError(err)
@@ -2485,7 +2484,7 @@ func (s *PluginSuite) TestUpdateRegistrationEntryWithMask() {
 
 func (s *PluginSuite) TestDeleteRegistrationEntry() {
 	// delete non-existing
-	_, err := s.ds.DeleteRegistrationEntry(ctx, "badid")
+	err := s.ds.DeleteRegistrationEntry(ctx, "badid")
 	s.RequireGRPCStatus(err, codes.NotFound, _notFoundErrMsg)
 
 	entry1 := s.createRegistrationEntry(&common.RegistrationEntry{
@@ -2499,7 +2498,7 @@ func (s *PluginSuite) TestDeleteRegistrationEntry() {
 		Ttl:      1,
 	})
 
-	s.createRegistrationEntry(&common.RegistrationEntry{
+	entry2 := s.createRegistrationEntry(&common.RegistrationEntry{
 		Selectors: []*common.Selector{
 			{Type: "Type3", Value: "Value3"},
 			{Type: "Type4", Value: "Value4"},
@@ -2515,20 +2514,18 @@ func (s *PluginSuite) TestDeleteRegistrationEntry() {
 	s.Require().NoError(err)
 	s.Require().Len(entriesResp.Entries, 2)
 
-	// Make sure we deleted the right one
-	deletedEntry, err := s.ds.DeleteRegistrationEntry(ctx, entry1.EntryId)
+	// Delete again must fails with Not Found
+	err = s.ds.DeleteRegistrationEntry(ctx, entry1.EntryId)
 	s.Require().NoError(err)
-	s.Require().Equal(entry1, deletedEntry)
 
 	// Make sure we have now only one registration entry
 	entriesResp, err = s.ds.ListRegistrationEntries(ctx, &datastore.ListRegistrationEntriesRequest{})
 	s.Require().NoError(err)
-	s.Require().Len(entriesResp.Entries, 1)
+	s.RequireProtoListEqual([]*common.RegistrationEntry{entry2}, entriesResp.Entries)
 
 	// Delete again must fails with Not Found
-	deletedEntry, err = s.ds.DeleteRegistrationEntry(ctx, entry1.EntryId)
+	err = s.ds.DeleteRegistrationEntry(ctx, entry1.EntryId)
 	s.Require().EqualError(err, "rpc error: code = NotFound desc = datastore-sql: record not found")
-	s.Require().Nil(deletedEntry)
 }
 
 func (s *PluginSuite) TestListParentIDEntries() {
@@ -4009,7 +4006,7 @@ func (s *PluginSuite) createRegistrationEntry(entry *common.RegistrationEntry) *
 }
 
 func (s *PluginSuite) deleteRegistrationEntry(entryID string) {
-	_, err := s.ds.DeleteRegistrationEntry(ctx, entryID)
+	err := s.ds.DeleteRegistrationEntry(ctx, entryID)
 	s.Require().NoError(err)
 }
 

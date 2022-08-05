@@ -260,14 +260,10 @@ func (ds *Plugin) UpdateAttestedNode(ctx context.Context, n *common.AttestedNode
 }
 
 // DeleteAttestedNode deletes the given attested node
-func (ds *Plugin) DeleteAttestedNode(ctx context.Context, spiffeID string) (attestedNode *common.AttestedNode, err error) {
-	if err = ds.withWriteTx(ctx, func(tx *gorm.DB) (err error) {
-		attestedNode, err = deleteAttestedNode(tx, spiffeID)
-		return err
-	}); err != nil {
-		return nil, err
-	}
-	return attestedNode, nil
+func (ds *Plugin) DeleteAttestedNode(ctx context.Context, spiffeID string) error {
+	return ds.withWriteTx(ctx, func(tx *gorm.DB) error {
+		return deleteAttestedNode(tx, spiffeID)
+	})
 }
 
 // SetNodeSelectors sets node (agent) selectors by SPIFFE ID, deleting old selectors first
@@ -374,15 +370,10 @@ func (ds *Plugin) UpdateRegistrationEntry(ctx context.Context, e *common.Registr
 }
 
 // DeleteRegistrationEntry deletes the given registration
-func (ds *Plugin) DeleteRegistrationEntry(ctx context.Context,
-	entryID string) (registrationEntry *common.RegistrationEntry, err error) {
-	if err = ds.withWriteTx(ctx, func(tx *gorm.DB) (err error) {
-		registrationEntry, err = deleteRegistrationEntry(tx, entryID)
-		return err
-	}); err != nil {
-		return nil, err
-	}
-	return registrationEntry, nil
+func (ds *Plugin) DeleteRegistrationEntry(ctx context.Context, entryID string) error {
+	return ds.withWriteTx(ctx, func(tx *gorm.DB) error {
+		return deleteRegistrationEntry(tx, entryID)
+	})
 }
 
 // PruneRegistrationEntries takes a registration entry message, and deletes all entries which have expired
@@ -1623,6 +1614,12 @@ func updateAttestedNode(tx *gorm.DB, n *common.AttestedNode, mask *common.Attest
 	if mask.CanReattest {
 		updates["can_reattest"] = n.CanReattest
 	}
+	if mask.Selectors {
+		if err := setNodeSelectors(tx, n.SpiffeId, n.Selectors); err != nil {
+			return nil, err
+		}
+	}
+
 	if err := tx.Model(&model).Updates(updates).Error; err != nil {
 		return nil, sqlError.Wrap(err)
 	}
@@ -1630,17 +1627,17 @@ func updateAttestedNode(tx *gorm.DB, n *common.AttestedNode, mask *common.Attest
 	return modelToAttestedNode(model), nil
 }
 
-func deleteAttestedNode(tx *gorm.DB, spiffeID string) (*common.AttestedNode, error) {
+func deleteAttestedNode(tx *gorm.DB, spiffeID string) error {
 	var model AttestedNode
 	if err := tx.Find(&model, "spiffe_id = ?", spiffeID).Error; err != nil {
-		return nil, sqlError.Wrap(err)
+		return sqlError.Wrap(err)
 	}
 
 	if err := tx.Delete(&model).Error; err != nil {
-		return nil, sqlError.Wrap(err)
+		return sqlError.Wrap(err)
 	}
 
-	return modelToAttestedNode(model), nil
+	return nil
 }
 
 func setNodeSelectors(tx *gorm.DB, spiffeID string, selectors []*common.Selector) error {
@@ -3208,23 +3205,13 @@ func updateRegistrationEntry(tx *gorm.DB, e *common.RegistrationEntry, mask *com
 	return returnEntry, nil
 }
 
-func deleteRegistrationEntry(tx *gorm.DB, entryID string) (*common.RegistrationEntry, error) {
+func deleteRegistrationEntry(tx *gorm.DB, entryID string) error {
 	entry := RegisteredEntry{}
 	if err := tx.Find(&entry, "entry_id = ?", entryID).Error; err != nil {
-		return nil, sqlError.Wrap(err)
+		return sqlError.Wrap(err)
 	}
 
-	registrationEntry, err := modelToEntry(tx, entry)
-	if err != nil {
-		return nil, err
-	}
-
-	err = deleteRegistrationEntrySupport(tx, entry)
-	if err != nil {
-		return nil, err
-	}
-
-	return registrationEntry, nil
+	return deleteRegistrationEntrySupport(tx, entry)
 }
 
 func deleteRegistrationEntrySupport(tx *gorm.DB, entry RegisteredEntry) error {

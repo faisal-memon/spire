@@ -1327,7 +1327,7 @@ func TestBatchDeleteFederationRelationship(t *testing.T) {
 			for _, fr := range listResp.FederationRelationships {
 				tds = append(tds, fr.TrustDomain.String())
 			}
-			require.Equal(t, tt.expectDs, tds)
+			require.ElementsMatch(t, tt.expectDs, tds)
 		})
 	}
 }

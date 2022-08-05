@@ -198,7 +198,7 @@ func (s *Service) DeleteAgent(ctx context.Context, req *agentv1.DeleteAgentReque
 
 	log = log.WithField(telemetry.SPIFFEID, id.String())
 
-	_, err = s.ds.DeleteAttestedNode(ctx, id.String())
+	err = s.ds.DeleteAttestedNode(ctx, id.String())
 	switch status.Code(err) {
 	case codes.OK:
 		log.Info("Agent deleted")
@@ -305,12 +305,12 @@ func (s *Service) AttestAgent(stream agentv1.Agent_AttestAgentServer) error {
 	}
 
 	// fetch the agent/node to check if it was already attested or banned
-	attestedNode, err := s.ds.FetchAttestedNode(ctx, agentID.String())
+	existingNode, err := s.ds.FetchAttestedNode(ctx, agentID.String())
 	if err != nil {
 		return api.MakeErr(log, codes.Internal, "failed to fetch agent", err)
 	}
 
-	if attestedNode != nil && nodeutil.IsAgentBanned(attestedNode) {
+	if existingNode != nil && nodeutil.IsAgentBanned(existingNode) {
 		return api.MakeErr(log, codes.PermissionDenied, "failed to attest: agent is banned", nil)
 	}
 
@@ -321,36 +321,29 @@ func (s *Service) AttestAgent(stream agentv1.Agent_AttestAgentServer) error {
 	}
 
 	// augment selectors with resolver
-	resolvedSelectors, err := s.resolveSelectors(ctx, agentID, params.Data.Type)
-	if err != nil {
+	selectors := attestResult.Selectors
+	if resolved, err := s.resolveSelectors(ctx, agentID, params.Data.Type); err == nil {
+		selectors = append(selectors, resolved...)
+	} else {
 		return api.MakeErr(log, codes.Internal, "failed to resolve selectors", err)
-	}
-	// store augmented selectors
-	err = s.ds.SetNodeSelectors(ctx, agentID.String(), append(attestResult.Selectors, resolvedSelectors...))
-	if err != nil {
-		return api.MakeErr(log, codes.Internal, "failed to update selectors", err)
 	}
 
 	// create or update attested entry
-	if attestedNode == nil {
-		node := &common.AttestedNode{
-			AttestationDataType: params.Data.Type,
-			SpiffeId:            agentID.String(),
-			CertNotAfter:        svid[0].NotAfter.Unix(),
-			CertSerialNumber:    svid[0].SerialNumber.String(),
-			CanReattest:         attestResult.CanReattest,
-		}
-		if _, err := s.ds.CreateAttestedNode(ctx, node); err != nil {
+	newNode := &common.AttestedNode{
+		AttestationDataType: params.Data.Type,
+		SpiffeId:            agentID.String(),
+		CertNotAfter:        svid[0].NotAfter.Unix(),
+		CertSerialNumber:    svid[0].SerialNumber.String(),
+		CanReattest:         attestResult.CanReattest,
+		Selectors:           selectors,
+	}
+
+	if existingNode == nil {
+		if _, err := s.ds.CreateAttestedNode(ctx, newNode); err != nil {
 			return api.MakeErr(log, codes.Internal, "failed to create attested agent", err)
 		}
 	} else {
-		node := &common.AttestedNode{
-			SpiffeId:         agentID.String(),
-			CertNotAfter:     svid[0].NotAfter.Unix(),
-			CertSerialNumber: svid[0].SerialNumber.String(),
-			CanReattest:      attestResult.CanReattest,
-		}
-		if _, err := s.ds.UpdateAttestedNode(ctx, node, nil); err != nil {
+		if _, err := s.ds.UpdateAttestedNode(ctx, newNode, nil); err != nil {
 			return api.MakeErr(log, codes.Internal, "failed to update attested agent", err)
 		}
 	}

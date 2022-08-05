@@ -41,7 +41,7 @@ func scanForBadEntries(log logrus.FieldLogger, metrics telemetry.Metrics, ds dat
 						logrus.ErrorKey:          err,
 					}).Error("Deleting entry with invalid parentID")
 					deleted++
-					if _, err := ds.DeleteRegistrationEntry(ctx, entry.EntryId); err != nil {
+					if err := ds.DeleteRegistrationEntry(ctx, entry.EntryId); err != nil {
 						log.WithError(err).Error("Failed to delete entry with an invalid parentID")
 					}
 					continue
@@ -54,7 +54,7 @@ func scanForBadEntries(log logrus.FieldLogger, metrics telemetry.Metrics, ds dat
 						logrus.ErrorKey:          err,
 					}).Error("Deleting entry with invalid spiffeID")
 					deleted++
-					if _, err := ds.DeleteRegistrationEntry(ctx, entry.EntryId); err != nil {
+					if err := ds.DeleteRegistrationEntry(ctx, entry.EntryId); err != nil {
 						log.WithError(err).Error("Failed to delete entry with an invalid spiffeID")
 					}
 					continue

@@ -97,7 +97,12 @@ func AgentAuthorizer(log logrus.FieldLogger, ds datastore.DataStore, clk clock.C
 				SpiffeId:         attestedNode.SpiffeId,
 				CertNotAfter:     attestedNode.NewCertNotAfter,
 				CertSerialNumber: attestedNode.NewCertSerialNumber,
-			}, nil)
+			}, &common.AttestedNodeMask{
+				CertSerialNumber:    true,
+				CertNotAfter:        true,
+				NewCertSerialNumber: true,
+				NewCertNotAfter:     true,
+			})
 			if err != nil {
 				log.WithFields(logrus.Fields{
 					telemetry.SVIDSerialNumber: agentSVID.SerialNumber.String(),

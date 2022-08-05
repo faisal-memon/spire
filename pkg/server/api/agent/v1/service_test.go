@@ -776,7 +776,7 @@ func TestListAgents(t *testing.T) {
 					{Id: api.ProtoFromID(node1ID)},
 					{Id: api.ProtoFromID(node2ID)},
 				},
-				NextPageToken: "2",
+				NextPageToken: "spiffe://example.org/node2",
 			},
 			expectLogs: []spiretest.LogEntry{
 				{
@@ -2798,49 +2798,11 @@ func TestAttestAgent(t *testing.T) {
 		},
 
 		{
-			name:       "ds: fails to update selectors",
-			request:    getAttestAgentRequest("join_token", []byte("test_token"), testCsr),
-			expectCode: codes.Internal,
-			expectMsg:  "failed to update selectors",
-			dsError: []error{
-				nil,
-				nil,
-				nil,
-				errors.New("some error"),
-			},
-			expectLogs: []spiretest.LogEntry{
-				{
-					Level:   logrus.ErrorLevel,
-					Message: "Failed to update selectors",
-
-					Data: logrus.Fields{
-						telemetry.NodeAttestorType: "join_token",
-						logrus.ErrorKey:            "some error",
-						telemetry.AgentID:          spiffeid.RequireFromPath(td, "/spire/agent/join_token/test_token").String(),
-					},
-				},
-				{
-					Level:   logrus.InfoLevel,
-					Message: "API accessed",
-					Data: logrus.Fields{
-						telemetry.Status:           "error",
-						telemetry.Type:             "audit",
-						telemetry.StatusCode:       "Internal",
-						telemetry.StatusMessage:    "failed to update selectors: some error",
-						telemetry.AgentID:          "spiffe://example.org/spire/agent/join_token/test_token",
-						telemetry.NodeAttestorType: "join_token",
-					},
-				},
-			},
-		},
-
-		{
 			name:       "ds: fails to create attested agent",
 			request:    getAttestAgentRequest("join_token", []byte("test_token"), testCsr),
 			expectCode: codes.Internal,
 			expectMsg:  "failed to create attested agent",
 			dsError: []error{
-				nil,
 				nil,
 				nil,
 				nil,
@@ -2850,6 +2812,7 @@ func TestAttestAgent(t *testing.T) {
 				{
 					Level:   logrus.ErrorLevel,
 					Message: "Failed to create attested agent",
+
 					Data: logrus.Fields{
 						telemetry.NodeAttestorType: "join_token",
 						logrus.ErrorKey:            "some error",
@@ -2876,7 +2839,6 @@ func TestAttestAgent(t *testing.T) {
 			expectCode: codes.Internal,
 			expectMsg:  "failed to update attested agent",
 			dsError: []error{
-				nil,
 				nil,
 				errors.New("some error"),
 			},

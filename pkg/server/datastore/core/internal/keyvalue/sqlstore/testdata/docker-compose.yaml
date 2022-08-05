@@ -1,0 +1,11 @@
+version: '3'
+services:
+  postgres-9:
+    image: postgres:9
+    environment:
+      - POSTGRES_PASSWORD=password
+    tmpfs:
+      - /var/lib/postgresql
+    ports:
+      - "9999:5432"
+    shm_size: 1g

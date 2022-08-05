@@ -1,0 +1,43 @@
+[
+  {
+        "revision_number": 1,
+    "selectors": [
+      {
+        "type": "Type",
+        "value": "Value"
+      }
+    ]
+  },
+  {
+        "revision_number": 1,
+    "selectors": [
+      {
+        "type": "Type",
+        "value": "Value"
+      }
+    ],
+    "spiffe_id": "SpiffeId",
+    "ttl": -5
+  },
+  {
+        "revision_number": 1,
+    "spiffe_id": "SpiffeId"
+  },
+  {
+        "revision_number": 1,
+    "selectors": [
+      {
+        "type": "Type1",
+        "value": "Value1"
+      },
+      {
+        "type": "Type2",
+        "value": "Value2"
+      }
+    ],
+    "spiffe_id": "SpiffeId3",
+    "ttl": 2,
+    "store_svid": true
+  },
+  null
+]

@@ -27,7 +27,7 @@ type DataStore interface {
 	CountRegistrationEntries(context.Context) (int32, error)
 	CreateRegistrationEntry(context.Context, *common.RegistrationEntry) (*common.RegistrationEntry, error)
 	CreateOrReturnRegistrationEntry(context.Context, *common.RegistrationEntry) (*common.RegistrationEntry, bool, error)
-	DeleteRegistrationEntry(ctx context.Context, entryID string) (*common.RegistrationEntry, error)
+	DeleteRegistrationEntry(ctx context.Context, entryID string) error
 	FetchRegistrationEntry(ctx context.Context, entryID string) (*common.RegistrationEntry, error)
 	ListRegistrationEntries(context.Context, *ListRegistrationEntriesRequest) (*ListRegistrationEntriesResponse, error)
 	PruneRegistrationEntries(ctx context.Context, expiresBefore time.Time) error
@@ -36,7 +36,7 @@ type DataStore interface {
 	// Nodes
 	CountAttestedNodes(context.Context) (int32, error)
 	CreateAttestedNode(context.Context, *common.AttestedNode) (*common.AttestedNode, error)
-	DeleteAttestedNode(ctx context.Context, spiffeID string) (*common.AttestedNode, error)
+	DeleteAttestedNode(ctx context.Context, spiffeID string) error
 	FetchAttestedNode(ctx context.Context, spiffeID string) (*common.AttestedNode, error)
 	ListAttestedNodes(context.Context, *ListAttestedNodesRequest) (*ListAttestedNodesResponse, error)
 	UpdateAttestedNode(context.Context, *common.AttestedNode, *common.AttestedNodeMask) (*common.AttestedNode, error)
@@ -132,6 +132,7 @@ type ListAttestedNodesRequest struct {
 	ByAttestationType string
 	ByBanned          *bool
 	ByExpiresBefore   time.Time
+	ByExpiresAfter    time.Time
 	BySelectorMatch   *BySelectors
 	FetchSelectors    bool
 	Pagination        *Pagination
@@ -166,8 +167,10 @@ type ListRegistrationEntriesRequest struct {
 	ByParentID      string
 	BySelectors     *BySelectors
 	BySpiffeID      string
-	Pagination      *Pagination
 	ByFederatesWith *ByFederatesWith
+	ByExpiresBefore time.Time
+
+	Pagination *Pagination
 }
 
 type ListRegistrationEntriesResponse struct {

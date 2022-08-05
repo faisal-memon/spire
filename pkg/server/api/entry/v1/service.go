@@ -277,7 +277,7 @@ func (s *Service) deleteEntry(ctx context.Context, id string) *entryv1.BatchDele
 
 	log = log.WithField(telemetry.RegistrationID, id)
 
-	_, err := s.ds.DeleteRegistrationEntry(ctx, id)
+	err := s.ds.DeleteRegistrationEntry(ctx, id)
 	switch status.Code(err) {
 	case codes.OK:
 		return &entryv1.BatchDeleteEntryResponse_Result{

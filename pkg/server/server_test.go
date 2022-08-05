@@ -104,7 +104,7 @@ func (suite *ServerTestSuite) TestValidateTrustDomain() {
 	suite.EqualError(err, fmt.Sprintf(invalidTrustDomainRegistrationEntry, "test.com", "new_test.com"))
 
 	// Create a registration entry with an invalid url
-	_, err = ds.DeleteRegistrationEntry(ctx, registrationEntry.EntryId)
+	err = ds.DeleteRegistrationEntry(ctx, registrationEntry.EntryId)
 	suite.NoError(err)
 	suite.server.config.TrustDomain = trustDomain
 	registrationEntry, err = ds.CreateRegistrationEntry(ctx, &common.RegistrationEntry{
@@ -119,12 +119,12 @@ func (suite *ServerTestSuite) TestValidateTrustDomain() {
 	}
 
 	// remove entry to solve error
-	_, err = ds.DeleteRegistrationEntry(ctx, registrationEntry.EntryId)
+	err = ds.DeleteRegistrationEntry(ctx, registrationEntry.EntryId)
 	suite.NoError(err)
 
 	// create attested node with current trust domain
 	// drop resp
-	_, err = ds.DeleteAttestedNode(ctx, attestedNode.SpiffeId)
+	err = ds.DeleteAttestedNode(ctx, attestedNode.SpiffeId)
 	suite.NoError(err)
 	_, err = ds.CreateAttestedNode(ctx, &common.AttestedNode{
 		SpiffeId:            "spiffe://inv%ild/host",

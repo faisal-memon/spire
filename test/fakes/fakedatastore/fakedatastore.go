@@ -2,9 +2,7 @@ package fakedatastore
 
 import (
 	"context"
-	"fmt"
 	"sort"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -154,9 +152,9 @@ func (s *DataStore) UpdateAttestedNode(ctx context.Context, node *common.Atteste
 	return s.ds.UpdateAttestedNode(ctx, node, mask)
 }
 
-func (s *DataStore) DeleteAttestedNode(ctx context.Context, spiffeID string) (*common.AttestedNode, error) {
+func (s *DataStore) DeleteAttestedNode(ctx context.Context, spiffeID string) error {
 	if err := s.getNextError(); err != nil {
-		return nil, err
+		return err
 	}
 	return s.ds.DeleteAttestedNode(ctx, spiffeID)
 }
@@ -234,9 +232,9 @@ func (s *DataStore) UpdateRegistrationEntry(ctx context.Context, entry *common.R
 	return s.ds.UpdateRegistrationEntry(ctx, entry, mask)
 }
 
-func (s *DataStore) DeleteRegistrationEntry(ctx context.Context, entryID string) (*common.RegistrationEntry, error) {
+func (s *DataStore) DeleteRegistrationEntry(ctx context.Context, entryID string) error {
 	if err := s.getNextError(); err != nil {
-		return nil, err
+		return err
 	}
 	return s.ds.DeleteRegistrationEntry(ctx, entryID)
 }

@@ -235,7 +235,7 @@ go_ldflags := '${go_ldflags}'
 
 .PHONY: build
 
-build: tidy bin/spire-server bin/spire-agent bin/k8s-workload-registrar bin/oidc-discovery-provider
+build: bin/spire-server bin/spire-agent bin/k8s-workload-registrar bin/oidc-discovery-provider
 
 define binary_rule
 .PHONY: $1

@@ -43,6 +43,15 @@ func RequireGRPCStatus(tb testing.TB, err error, code codes.Code, message string
 	}
 }
 
+func AssertGRPCCode(tb testing.TB, err error, code codes.Code) bool {
+	tb.Helper()
+	st := status.Convert(err)
+	if code != st.Code() {
+		return assert.Fail(tb, fmt.Sprintf("Status code=%q does not match code=%q", st.Code(), code))
+	}
+	return true
+}
+
 func AssertGRPCStatus(tb testing.TB, err error, code codes.Code, message string) bool {
 	tb.Helper()
 	st := status.Convert(err)
@@ -143,7 +152,10 @@ func RequireProtoEqual(tb testing.TB, expected, actual proto.Message, msgAndArgs
 
 func AssertProtoEqual(tb testing.TB, expected, actual proto.Message, msgAndArgs ...interface{}) bool {
 	tb.Helper()
-	return assert.Empty(tb, cmp.Diff(expected, actual, protocmp.Transform()), msgAndArgs...)
+	if diff := cmp.Diff(expected, actual, protocmp.Transform()); diff != "" {
+		return assert.Fail(tb, "proto is not equal", "%s", diff)
+	}
+	return true
 }
 
 func RequireErrorPrefix(tb testing.TB, err error, prefix string) {

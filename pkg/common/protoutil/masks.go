@@ -15,8 +15,9 @@ var (
 	AllTrueEntryMask                  = MakeAllTrueMask(&types.EntryMask{}).(*types.EntryMask)
 	AllTrueFederationRelationshipMask = MakeAllTrueMask(&types.FederationRelationshipMask{}).(*types.FederationRelationshipMask)
 
-	AllTrueCommonBundleMask = MakeAllTrueMask(&common.BundleMask{}).(*common.BundleMask)
-	AllTrueCommonAgentMask  = MakeAllTrueMask(&common.AttestedNodeMask{}).(*common.AttestedNodeMask)
+	AllTrueCommonBundleMask            = MakeAllTrueMask(&common.BundleMask{}).(*common.BundleMask)
+	AllTrueCommonAgentMask             = MakeAllTrueMask(&common.AttestedNodeMask{}).(*common.AttestedNodeMask)
+	AllTrueCommonRegistrationEntryMask = MakeAllTrueMask(&common.RegistrationEntryMask{}).(*common.RegistrationEntryMask)
 )
 
 func MakeAllTrueMask(m proto.Message) proto.Message {

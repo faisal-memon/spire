@@ -71,7 +71,7 @@ func (w metricsWrapper) ListFederationRelationships(ctx context.Context, req *da
 	return w.ds.ListFederationRelationships(ctx, req)
 }
 
-func (w metricsWrapper) DeleteAttestedNode(ctx context.Context, spiffeID string) (_ *common.AttestedNode, err error) {
+func (w metricsWrapper) DeleteAttestedNode(ctx context.Context, spiffeID string) (err error) {
 	callCounter := StartDeleteNodeCall(w.m)
 	defer callCounter.Done(&err)
 	return w.ds.DeleteAttestedNode(ctx, spiffeID)
@@ -95,7 +95,7 @@ func (w metricsWrapper) DeleteJoinToken(ctx context.Context, token string) (err 
 	return w.ds.DeleteJoinToken(ctx, token)
 }
 
-func (w metricsWrapper) DeleteRegistrationEntry(ctx context.Context, entryID string) (_ *common.RegistrationEntry, err error) {
+func (w metricsWrapper) DeleteRegistrationEntry(ctx context.Context, entryID string) (err error) {
 	callCounter := StartDeleteRegistrationCall(w.m)
 	defer callCounter.Done(&err)
 	return w.ds.DeleteRegistrationEntry(ctx, entryID)

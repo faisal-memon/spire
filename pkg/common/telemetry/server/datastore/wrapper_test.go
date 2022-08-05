@@ -301,8 +301,8 @@ func (ds *fakeDataStore) CreateOrReturnRegistrationEntry(context.Context, *commo
 	return &common.RegistrationEntry{}, true, ds.err
 }
 
-func (ds *fakeDataStore) DeleteAttestedNode(context.Context, string) (*common.AttestedNode, error) {
-	return &common.AttestedNode{}, ds.err
+func (ds *fakeDataStore) DeleteAttestedNode(context.Context, string) error {
+	return ds.err
 }
 
 func (ds *fakeDataStore) DeleteBundle(context.Context, string, datastore.DeleteMode) error {
@@ -317,8 +317,8 @@ func (ds *fakeDataStore) DeleteJoinToken(context.Context, string) error {
 	return ds.err
 }
 
-func (ds *fakeDataStore) DeleteRegistrationEntry(context.Context, string) (*common.RegistrationEntry, error) {
-	return &common.RegistrationEntry{}, ds.err
+func (ds *fakeDataStore) DeleteRegistrationEntry(context.Context, string) error {
+	return ds.err
 }
 
 func (ds *fakeDataStore) FetchAttestedNode(context.Context, string) (*common.AttestedNode, error) {
