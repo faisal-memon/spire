@@ -154,12 +154,13 @@ func (s *Service) ListEntries(ctx context.Context, req *entryv1.ListEntriesReque
 func (s *Service) GetEntry(ctx context.Context, req *entryv1.GetEntryRequest) (*types.Entry, error) {
 	log := rpccontext.Logger(ctx)
 
-	if req.Id == "" {
-		return nil, api.MakeErr(log, codes.InvalidArgument, "missing ID", nil)
+	cEntry, err := api.ProtoToRegistrationEntry(ctx, s.td, req.Entry)
+	if err != nil {
+		return nil, api.MakeErr(log, codes.InvalidArgument, "failed to convert to common entry", err)
 	}
-	rpccontext.AddRPCAuditFields(ctx, logrus.Fields{telemetry.RegistrationID: req.Id})
-	log = log.WithField(telemetry.RegistrationID, req.Id)
-	registrationEntry, err := s.ds.FetchRegistrationEntry(ctx, req.Id)
+	rpccontext.AddRPCAuditFields(ctx, logrus.Fields{telemetry.SPIFFEID: cEntry.SpiffeId})
+	log = log.WithField(telemetry.SPIFFEID, cEntry.SpiffeId)
+	registrationEntry, err := s.ds.FetchRegistrationEntry(ctx, cEntry)
 	if err != nil {
 		return nil, api.MakeErr(log, codes.Internal, "failed to fetch entry", err)
 	}

@@ -183,7 +183,12 @@ func (c *showCommand) fetchEntries(ctx context.Context, client entryv1.EntryClie
 
 // fetchByEntryID uses the configured EntryID to fetch the appropriate registration entry
 func (c *showCommand) fetchByEntryID(ctx context.Context, id string, client entryv1.EntryClient) (*types.Entry, error) {
-	entry, err := client.GetEntry(ctx, &entryv1.GetEntryRequest{Id: id})
+	// FIXME need to find a way to support get by entry id
+	entry, err := client.GetEntry(ctx, &entryv1.GetEntryRequest{
+		Entry: &types.Entry {
+			Id: id,
+		},
+	})
 	if err != nil {
 		return nil, err
 	}

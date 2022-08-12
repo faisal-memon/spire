@@ -36,7 +36,12 @@ func (ds *DataStore) FetchFederationRelationship(ctx context.Context, td spiffei
 	if td.IsZero() {
 		return nil, status.Error(codes.InvalidArgument, "trust domain is required")
 	}
-	out, err := ds.federationRelationships.Get(td.String())
+	obj := federationRelationshipObject{
+		FederationRelationship: &datastore.FederationRelationship{
+			TrustDomain: td,
+		},
+	}
+	out, err := ds.federationRelationships.Get(obj)
 	switch {
 	case err == nil:
 		return ds.makeFederationRelationship(out.Object.FederationRelationship), nil
@@ -76,7 +81,7 @@ func (ds *DataStore) UpdateFederationRelationship(ctx context.Context, update *d
 	if err := validateFederationRelationship(update, mask); err != nil {
 		return nil, err
 	}
-	existing, err := ds.federationRelationships.Get(update.TrustDomain.String())
+	existing, err := ds.federationRelationships.Get(federationRelationshipObject{FederationRelationship: update})
 	if err != nil {
 		return nil, dsErr(err, "unable to fetch federation relationship")
 	}
@@ -119,7 +124,7 @@ func (ds *DataStore) UpdateFederationRelationship(ctx context.Context, update *d
 
 func (ds *DataStore) makeFederationRelationship(in *datastore.FederationRelationship) *datastore.FederationRelationship {
 	fr := *in
-	if bundleRecord, err := ds.bundles.Get(in.TrustDomain.String()); err == nil {
+	if bundleRecord, err := ds.bundles.Get(bundleObject{Bundle: in.TrustDomainBundle}); err == nil {
 		fr.TrustDomainBundle = bundleRecord.Object.Bundle
 	}
 	return &fr

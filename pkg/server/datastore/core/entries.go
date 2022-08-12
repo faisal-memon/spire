@@ -60,8 +60,8 @@ func (ds *DataStore) DeleteRegistrationEntry(ctx context.Context, entryID string
 	return nil
 }
 
-func (ds *DataStore) FetchRegistrationEntry(ctx context.Context, entryID string) (*common.RegistrationEntry, error) {
-	r, err := ds.entries.Get(entryID)
+func (ds *DataStore) FetchRegistrationEntry(ctx context.Context, entry *common.RegistrationEntry) (*common.RegistrationEntry, error) {
+	r, err := ds.entries.Get(makeEntryObject(entry))
 	switch {
 	case err == nil:
 		return r.Object.Entry, nil
@@ -114,7 +114,7 @@ func (ds *DataStore) PruneRegistrationEntries(ctx context.Context, expiresBefore
 
 func (ds *DataStore) UpdateRegistrationEntry(ctx context.Context, newEntry *common.RegistrationEntry, mask *common.RegistrationEntryMask) (*common.RegistrationEntry, error) {
 	fmt.Println("UPDATE", newEntry.EntryId)
-	existing, err := ds.entries.Get(newEntry.EntryId)
+	existing, err := ds.entries.Get(makeEntryObject(newEntry))
 	if err != nil {
 		return nil, dsErr(err, "failed to update entry")
 	}

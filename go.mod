@@ -86,6 +86,8 @@ require (
 	sigs.k8s.io/controller-runtime v0.12.3
 )
 
+replace github.com/spiffe/spire-api-sdk => github.com/faisal-memon/spire-api-sdk v1.2.3-0.20220805211944-5e9cf8468742
+
 require (
 	cloud.google.com/go v0.102.1 // indirect
 	cloud.google.com/go/compute v1.7.0 // indirect

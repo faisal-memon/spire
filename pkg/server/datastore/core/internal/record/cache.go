@@ -41,9 +41,14 @@ func (c *Cache[C, I, O, L]) ReadIndex(f func(i I)) {
 	f(c.index)
 }
 
-func (c *Cache[C, I, O, L]) Get(key string) (*Record[O], error) {
+func (c *Cache[C, I, O, L]) Get(o O) (*Record[O], error) {
 	c.mtx.RLock()
 	defer c.mtx.RUnlock()
+
+	key, _, err := c.codec.Marshal(&o)
+	if err != nil {
+		return nil, err
+	}
 
 	r, ok := c.index.Get(key)
 	if !ok {

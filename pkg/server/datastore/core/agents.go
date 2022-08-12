@@ -30,7 +30,12 @@ func (ds *DataStore) DeleteAttestedNode(ctx context.Context, agentID string) err
 }
 
 func (ds *DataStore) FetchAttestedNode(ctx context.Context, agentID string) (*common.AttestedNode, error) {
-	r, err := ds.agents.Get(agentID)
+	obj := agentObject{
+		AttestedNode: &common.AttestedNode{
+			SpiffeId: agentID,
+		},
+	}
+	r, err := ds.agents.Get(obj)
 	switch {
 	case err == nil:
 		return r.Object.AttestedNode, nil
@@ -57,7 +62,7 @@ func (ds *DataStore) ListAttestedNodes(ctx context.Context, req *datastore.ListA
 }
 
 func (ds *DataStore) UpdateAttestedNode(ctx context.Context, newAgent *common.AttestedNode, mask *common.AttestedNodeMask) (*common.AttestedNode, error) {
-	record, err := ds.agents.Get(newAgent.SpiffeId)
+	record, err := ds.agents.Get(agentObject{AttestedNode: newAgent})
 	if err != nil {
 		return nil, dsErr(err, "failed to update agent")
 	}
@@ -93,7 +98,12 @@ func (ds *DataStore) UpdateAttestedNode(ctx context.Context, newAgent *common.At
 }
 
 func (ds *DataStore) GetNodeSelectors(ctx context.Context, spiffeID string, dataConsistency datastore.DataConsistency) ([]*common.Selector, error) {
-	record, err := ds.agents.Get(spiffeID)
+	obj := agentObject{
+		AttestedNode: &common.AttestedNode{
+			SpiffeId: spiffeID,
+		},
+	}
+	record, err := ds.agents.Get(obj)
 	if err != nil {
 		return nil, dsErr(err, "failed to get agent selectors")
 	}

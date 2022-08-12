@@ -158,7 +158,7 @@ func (r *SpiffeIDReconciler) updateOrCreateSpiffeID(ctx context.Context, spiffeI
 	if spiffeID.Status.EntryId != nil {
 		// Fetch existing entry
 		existing, err = r.c.E.GetEntry(ctx, &entryv1.GetEntryRequest{
-			Id: *spiffeID.Status.EntryId,
+			Entry: entry,
 		})
 		if err != nil {
 			return nil, false, err

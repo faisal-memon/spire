@@ -22,7 +22,11 @@ func (ds *DataStore) DeleteJoinToken(ctx context.Context, token string) error {
 }
 
 func (ds *DataStore) FetchJoinToken(ctx context.Context, token string) (*datastore.JoinToken, error) {
-	out, err := ds.joinTokens.Get(token)
+	out, err := ds.joinTokens.Get(joinTokenObject{
+		JoinToken: &datastore.JoinToken {
+			Token: token,
+		},
+	})
 	switch {
 	case err == nil:
 		return out.Object.JoinToken, nil

@@ -48,9 +48,10 @@ func New(ctx context.Context, config Config) (_ *DataStore, err error) {
 	case "etcd":
 		store, err = etcdstore.Open(etcdstore.Config{
 			Etcd: etcdstore.EtcdConfig{
-				Endpoints: []string{"127.0.0.1:2379"},
+				Endpoints: []string{config.DataSourceName},
 				Context:   ctx,
 			},
+			Log:       config.Log,
 		})
 	default:
 		err = errors.New("unsupported driver")

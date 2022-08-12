@@ -15,7 +15,7 @@ import (
 
 func (ds *DataStore) AppendBundle(ctx context.Context, appends *common.Bundle) (*common.Bundle, error) {
 	// TODO: validation
-	existing, err := ds.bundles.Get(appends.TrustDomainId)
+	existing, err := ds.bundles.Get(bundleObject{Bundle: appends})
 	switch {
 	case err == nil:
 		if merged, changed := bundleutil.MergeBundles(existing.Object.Bundle, appends); changed {
@@ -56,7 +56,12 @@ func (ds *DataStore) DeleteBundle(ctx context.Context, trustDomainID string, mod
 }
 
 func (ds *DataStore) FetchBundle(ctx context.Context, trustDomainID string) (*common.Bundle, error) {
-	out, err := ds.bundles.Get(trustDomainID)
+	obj := bundleObject {
+		Bundle: &common.Bundle {
+			TrustDomainId: trustDomainID,
+		},
+	}
+	out, err := ds.bundles.Get(obj)
 	switch {
 	case err == nil:
 		return out.Object.Bundle, nil
@@ -84,7 +89,12 @@ func (ds *DataStore) ListBundles(ctx context.Context, req *datastore.ListBundles
 
 func (ds *DataStore) PruneBundle(ctx context.Context, trustDomainID string, expiresBefore time.Time) (changed bool, err error) {
 	// TODO: validation
-	r, err := ds.bundles.Get(trustDomainID)
+	obj := bundleObject {
+		Bundle: &common.Bundle {
+			TrustDomainId: trustDomainID,
+		},
+	}
+	r, err := ds.bundles.Get(obj)
 	switch {
 	case err == nil:
 		pruned, changed, err := bundleutil.PruneBundle(r.Object.Bundle, expiresBefore, ds.log)
@@ -108,7 +118,7 @@ func (ds *DataStore) PruneBundle(ctx context.Context, trustDomainID string, expi
 }
 
 func (ds *DataStore) SetBundle(ctx context.Context, in *common.Bundle) (*common.Bundle, error) {
-	bundle, err := ds.bundles.Get(in.TrustDomainId)
+	bundle, err := ds.bundles.Get(bundleObject{Bundle: in})
 	switch {
 	case err == nil:
 		if err := ds.bundles.Update(ctx, bundleObject{Bundle: in}, bundle.Metadata.Revision); err != nil {
@@ -126,7 +136,7 @@ func (ds *DataStore) SetBundle(ctx context.Context, in *common.Bundle) (*common.
 }
 
 func (ds *DataStore) UpdateBundle(ctx context.Context, newBundle *common.Bundle, mask *common.BundleMask) (*common.Bundle, error) {
-	existing, err := ds.bundles.Get(newBundle.TrustDomainId)
+	existing, err := ds.bundles.Get(bundleObject{Bundle: newBundle})
 	if err != nil {
 		return nil, dsErr(err, "failed to update bundle")
 	}

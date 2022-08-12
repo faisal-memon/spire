@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spiffe/spire/pkg/server/datastore/core/internal/keyvalue"
 	"github.com/spiffe/spire/pkg/server/datastore/core/internal/keyvalue/etcdstore/internal"
 	"github.com/spiffe/spire/pkg/server/datastore/core/internal/keyvalue/internal/watch"
@@ -21,6 +22,7 @@ type Config struct {
 	Etcd   EtcdConfig
 	Prefix string
 	Now    func() time.Time
+	Log    logrus.FieldLogger
 }
 
 type Store struct {
@@ -28,6 +30,7 @@ type Store struct {
 	prefix  string
 	now     func() time.Time
 	watches watch.Watchers[watcher]
+	log    logrus.FieldLogger
 }
 
 func Open(config Config) (*Store, error) {
@@ -41,6 +44,7 @@ func Open(config Config) (*Store, error) {
 	}
 	return &Store{
 		c:      c,
+		log:    config.Log,
 		prefix: config.Prefix,
 		now:    config.Now,
 	}, nil

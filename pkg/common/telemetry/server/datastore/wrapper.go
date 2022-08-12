@@ -119,10 +119,10 @@ func (w metricsWrapper) FetchJoinToken(ctx context.Context, token string) (_ *da
 	return w.ds.FetchJoinToken(ctx, token)
 }
 
-func (w metricsWrapper) FetchRegistrationEntry(ctx context.Context, entryID string) (_ *common.RegistrationEntry, err error) {
+func (w metricsWrapper) FetchRegistrationEntry(ctx context.Context, entry *common.RegistrationEntry) (_ *common.RegistrationEntry, err error) {
 	callCounter := StartFetchRegistrationCall(w.m)
 	defer callCounter.Done(&err)
-	return w.ds.FetchRegistrationEntry(ctx, entryID)
+	return w.ds.FetchRegistrationEntry(ctx, entry)
 }
 
 func (w metricsWrapper) FetchFederationRelationship(ctx context.Context, trustDomain spiffeid.TrustDomain) (_ *datastore.FederationRelationship, err error) {
