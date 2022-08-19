@@ -98,7 +98,7 @@ func (ds *DataStore) PruneRegistrationEntries(ctx context.Context, expiresBefore
 	var errCount int
 	var firstErr error
 	for _, record := range records {
-		if err := ds.entries.Delete(ctx, record.Object.Entry.EntryId); err != nil {
+		if err := ds.entries.Delete(ctx, record.Object.Key()); err != nil {
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -233,7 +233,9 @@ func (c *entryIndex) Put(r *record.Record[entryObject]) error {
 	c.spiffeID.Set(r, r.Object.Entry.SpiffeId)
 	c.selectors.Set(r, r.Object.Entry.Selectors)
 	c.federatesWith.Set(r, r.Object.Entry.FederatesWith)
-	c.expiresAt.Set(r, r.Object.Entry.EntryExpiry)
+	if r.Object.Entry.EntryExpiry != 0 {
+		c.expiresAt.Set(r, r.Object.Entry.EntryExpiry)
+	}
 	return nil
 }
 
