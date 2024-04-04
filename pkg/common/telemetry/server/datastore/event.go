@@ -22,6 +22,24 @@ func StartGetLatestRegistrationEntryEventIDCall(m telemetry.Metrics) *telemetry.
 	return telemetry.StartCall(m, telemetry.Datastore, telemetry.RegistrationEntryEvent, telemetry.Fetch)
 }
 
+// StartCreateRegistrationEntryEventCall return metric
+// for server's datastore, on listing registration entry events.
+func StartCreateRegistrationEntryEventCall(m telemetry.Metrics) *telemetry.CallCounter {
+	return telemetry.StartCall(m, telemetry.Datastore, telemetry.RegistrationEntryEvent, telemetry.Create)
+}
+
+// StartDeleteRegistrationEntryEventCall return metric
+// for server's datastore, on listing registration entry events.
+func StartDeleteRegistrationEntryEventCall(m telemetry.Metrics) *telemetry.CallCounter {
+	return telemetry.StartCall(m, telemetry.Datastore, telemetry.RegistrationEntryEvent, telemetry.Delete)
+}
+
+// StartFetchRegistrationEntryEventCall return metric
+// for server's datastore, on listing registration entry events.
+func StartFetchRegistrationEntryEventCall(m telemetry.Metrics) *telemetry.CallCounter {
+	return telemetry.StartCall(m, telemetry.Datastore, telemetry.RegistrationEntryEvent, telemetry.Fetch)
+}
+
 // StartListAttestedNodesEventsCall return metric
 // for server's datastore, on listing attested node events.
 func StartListAttestedNodesEventsCall(m telemetry.Metrics) *telemetry.CallCounter {

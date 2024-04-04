@@ -60,6 +60,12 @@ func (w metricsWrapper) CreateOrReturnRegistrationEntry(ctx context.Context, ent
 	return w.ds.CreateOrReturnRegistrationEntry(ctx, entry)
 }
 
+func (w metricsWrapper) CreateRegistrationEntryEvent(ctx context.Context, event *datastore.RegistrationEntryEvent) (_ *datastore.RegistrationEntryEvent, err error) {
+	callCounter := StartCreateRegistrationEntryEventCall(w.m)
+	defer callCounter.Done(&err)
+	return w.ds.CreateRegistrationEntryEvent(ctx, event)
+}
+
 func (w metricsWrapper) CreateFederationRelationship(ctx context.Context, fr *datastore.FederationRelationship) (_ *datastore.FederationRelationship, err error) {
 	callCounter := StartCreateFederationRelationshipCall(w.m)
 	defer callCounter.Done(&err)
@@ -102,6 +108,12 @@ func (w metricsWrapper) DeleteRegistrationEntry(ctx context.Context, entryID str
 	return w.ds.DeleteRegistrationEntry(ctx, entryID)
 }
 
+func (w metricsWrapper) DeleteRegistrationEntryEvent(ctx context.Context, eventID uint) (err error) {
+	callCounter := StartDeleteRegistrationEntryEventCall(w.m)
+	defer callCounter.Done(&err)
+	return w.ds.DeleteRegistrationEntryEvent(ctx, eventID)
+}
+
 func (w metricsWrapper) FetchAttestedNode(ctx context.Context, spiffeID string) (_ *common.AttestedNode, err error) {
 	callCounter := StartFetchNodeCall(w.m)
 	defer callCounter.Done(&err)
@@ -124,6 +136,12 @@ func (w metricsWrapper) FetchRegistrationEntry(ctx context.Context, entryID stri
 	callCounter := StartFetchRegistrationCall(w.m)
 	defer callCounter.Done(&err)
 	return w.ds.FetchRegistrationEntry(ctx, entryID)
+}
+
+func (w metricsWrapper) FetchRegistrationEntryEvent(ctx context.Context, eventID uint) (_ *datastore.RegistrationEntryEvent, err error) {
+	callCounter := StartFetchRegistrationEntryEventCall(w.m)
+	defer callCounter.Done(&err)
+	return w.ds.FetchRegistrationEntryEvent(ctx, eventID)
 }
 
 func (w metricsWrapper) FetchFederationRelationship(ctx context.Context, trustDomain spiffeid.TrustDomain) (_ *datastore.FederationRelationship, err error) {

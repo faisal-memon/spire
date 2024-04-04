@@ -79,6 +79,10 @@ func TestWithMetrics(t *testing.T) {
 			methodName: "CreateOrReturnRegistrationEntry",
 		},
 		{
+			key:        "datastore.registration_entry_event.create",
+			methodName: "CreateRegistrationEntryEvent",
+		},
+		{
 			key:        "datastore.node.delete",
 			methodName: "DeleteAttestedNode",
 		},
@@ -99,6 +103,10 @@ func TestWithMetrics(t *testing.T) {
 			methodName: "DeleteRegistrationEntry",
 		},
 		{
+			key:        "datastore.registration_entry_event.delete",
+			methodName: "DeleteRegistrationEntryEvent",
+		},
+		{
 			key:        "datastore.node.fetch",
 			methodName: "FetchAttestedNode",
 		},
@@ -113,6 +121,10 @@ func TestWithMetrics(t *testing.T) {
 		{
 			key:        "datastore.registration_entry.fetch",
 			methodName: "FetchRegistrationEntry",
+		},
+		{
+			key:        "datastore.registration_entry_event.fetch",
+			methodName: "FetchRegistrationEntryEvent",
 		},
 		{
 			key:        "datastore.federation_relationship.fetch",
@@ -358,6 +370,10 @@ func (ds *fakeDataStore) CreateOrReturnRegistrationEntry(context.Context, *commo
 	return &common.RegistrationEntry{}, true, ds.err
 }
 
+func (ds *fakeDataStore) CreateRegistrationEntryEvent(context.Context, *datastore.RegistrationEntryEvent) (*datastore.RegistrationEntryEvent, error) {
+	return &datastore.RegistrationEntryEvent{}, ds.err
+}
+
 func (ds *fakeDataStore) DeleteAttestedNode(context.Context, string) (*common.AttestedNode, error) {
 	return &common.AttestedNode{}, ds.err
 }
@@ -378,6 +394,10 @@ func (ds *fakeDataStore) DeleteRegistrationEntry(context.Context, string) (*comm
 	return &common.RegistrationEntry{}, ds.err
 }
 
+func (ds *fakeDataStore) DeleteRegistrationEntryEvent(context.Context, uint) error {
+	return ds.err
+}
+
 func (ds *fakeDataStore) FetchAttestedNode(context.Context, string) (*common.AttestedNode, error) {
 	return &common.AttestedNode{}, ds.err
 }
@@ -396,6 +416,10 @@ func (ds *fakeDataStore) FetchJoinToken(context.Context, string) (*datastore.Joi
 
 func (ds *fakeDataStore) FetchRegistrationEntry(context.Context, string) (*common.RegistrationEntry, error) {
 	return &common.RegistrationEntry{}, ds.err
+}
+
+func (ds *fakeDataStore) FetchRegistrationEntryEvent(context.Context, uint) (*datastore.RegistrationEntryEvent, error) {
+	return &datastore.RegistrationEntryEvent{}, ds.err
 }
 
 func (ds *fakeDataStore) GetLatestAttestedNodeEventID(context.Context) (uint, error) {

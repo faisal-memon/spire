@@ -468,7 +468,9 @@ func (ds *Plugin) createOrReturnRegistrationEntry(ctx context.Context,
 			return err
 		}
 
-		return createRegistrationEntryEvent(tx, registrationEntry.EntryId)
+		return createRegistrationEntryEvent(tx, &datastore.RegistrationEntryEvent{
+			EntryID: registrationEntry.EntryId,
+		})
 	}); err != nil {
 		return nil, false, err
 	}
@@ -511,7 +513,9 @@ func (ds *Plugin) UpdateRegistrationEntry(ctx context.Context, e *common.Registr
 			return err
 		}
 
-		return createRegistrationEntryEvent(tx, entry.EntryId)
+		return createRegistrationEntryEvent(tx, &datastore.RegistrationEntryEvent{
+			EntryID: entry.EntryId,
+		})
 	}); err != nil {
 		return nil, err
 	}
@@ -528,7 +532,9 @@ func (ds *Plugin) DeleteRegistrationEntry(ctx context.Context,
 			return err
 		}
 
-		return createRegistrationEntryEvent(tx, entryID)
+		return createRegistrationEntryEvent(tx, &datastore.RegistrationEntryEvent{
+			EntryID: entryID,
+		})
 	}); err != nil {
 		return nil, err
 	}
@@ -572,6 +578,23 @@ func (ds *Plugin) GetLatestRegistrationEntryEventID(ctx context.Context) (eventI
 		return 0, err
 	}
 	return eventID, nil
+}
+
+func (ds *Plugin) CreateRegistrationEntryEvent(ctx context.Context, event *datastore.RegistrationEntryEvent) (*datastore.RegistrationEntryEvent, error) {
+	return event, ds.withWriteTx(ctx, func(tx *gorm.DB) (err error) {
+		return createRegistrationEntryEvent(tx, event)
+	})
+}
+
+func (ds *Plugin) DeleteRegistrationEntryEvent(ctx context.Context, eventID uint) error {
+	return ds.withWriteTx(ctx, func(tx *gorm.DB) (err error) {
+		return deleteRegistrationEntryEvent(tx, eventID)
+	})
+}
+
+// FetchRegistrationEntryEvent fetches an existing event by event ID
+func (ds *Plugin) FetchRegistrationEntryEvent(_ context.Context, eventID uint) (*datastore.RegistrationEntryEvent, error) {
+	return fetchRegistrationEntryEvent(ds.db, eventID)
 }
 
 // CreateJoinToken takes a Token message and stores it
@@ -3982,7 +4005,9 @@ func pruneRegistrationEntries(tx *gorm.DB, expiresBefore time.Time, logger logru
 		if err := deleteRegistrationEntrySupport(tx, entry); err != nil {
 			return err
 		}
-		if err := createRegistrationEntryEvent(tx, entry.EntryID); err != nil {
+		if err := createRegistrationEntryEvent(tx, &datastore.RegistrationEntryEvent{
+			EntryID: entry.EntryID,
+		}); err != nil {
 			return err
 		}
 		logger.WithFields(logrus.Fields{
@@ -3995,12 +4020,37 @@ func pruneRegistrationEntries(tx *gorm.DB, expiresBefore time.Time, logger logru
 	return nil
 }
 
-func createRegistrationEntryEvent(tx *gorm.DB, entryID string) error {
-	newRegisteredEntryEvent := RegisteredEntryEvent{
-		EntryID: entryID,
+func createRegistrationEntryEvent(tx *gorm.DB, event *datastore.RegistrationEntryEvent) error {
+	if err := tx.Create(&RegisteredEntryEvent{
+		Model: Model{
+			ID: event.EventID,
+		},
+		EntryID: event.EntryID,
+	}).Error; err != nil {
+		return sqlError.Wrap(err)
 	}
 
-	if err := tx.Create(&newRegisteredEntryEvent).Error; err != nil {
+	return nil
+}
+
+func fetchRegistrationEntryEvent(db *sqlDB, eventID uint) (*datastore.RegistrationEntryEvent, error) {
+	event := RegisteredEntryEvent{}
+	if err := db.Find(&event, "id = ?", eventID).Error; err != nil {
+		return nil, sqlError.Wrap(err)
+	}
+
+	return &datastore.RegistrationEntryEvent{
+		EventID: event.ID,
+		EntryID: event.EntryID,
+	}, nil
+}
+
+func deleteRegistrationEntryEvent(tx *gorm.DB, eventID uint) error {
+	if err := tx.Delete(&RegisteredEntryEvent{
+		Model: Model{
+			ID: eventID,
+		},
+	}).Error; err != nil {
 		return sqlError.Wrap(err)
 	}
 

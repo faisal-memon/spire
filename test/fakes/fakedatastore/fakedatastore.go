@@ -320,6 +320,27 @@ func (s *DataStore) GetLatestRegistrationEntryEventID(ctx context.Context) (uint
 	return s.ds.GetLatestRegistrationEntryEventID(ctx)
 }
 
+func (s *DataStore) CreateRegistrationEntryEvent(ctx context.Context, event *datastore.RegistrationEntryEvent) (*datastore.RegistrationEntryEvent, error) {
+	if err := s.getNextError(); err != nil {
+		return nil, err
+	}
+	return s.ds.CreateRegistrationEntryEvent(ctx, event)
+}
+
+func (s *DataStore) DeleteRegistrationEntryEvent(ctx context.Context, eventID uint) error {
+	if err := s.getNextError(); err != nil {
+		return err
+	}
+	return s.ds.DeleteRegistrationEntryEvent(ctx, eventID)
+}
+
+func (s *DataStore) FetchRegistrationEntryEvent(ctx context.Context, eventID uint) (*datastore.RegistrationEntryEvent, error) {
+	if err := s.getNextError(); err != nil {
+		return nil, err
+	}
+	return s.ds.FetchRegistrationEntryEvent(ctx, eventID)
+}
+
 func (s *DataStore) CreateJoinToken(ctx context.Context, token *datastore.JoinToken) error {
 	if err := s.getNextError(); err != nil {
 		return err

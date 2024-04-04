@@ -13,6 +13,7 @@ import (
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/spire/pkg/common/idutil"
 	"github.com/spiffe/spire/pkg/server/authorizedentries"
+	"github.com/spiffe/spire/pkg/server/datastore"
 	"github.com/spiffe/spire/proto/spire/common"
 	"github.com/spiffe/spire/test/clock"
 	"github.com/spiffe/spire/test/fakes/fakedatastore"
@@ -317,4 +318,88 @@ func TestRunUpdateCacheTaskPrunesExpiredAgents(t *testing.T) {
 	cancel()
 	err = <-updateCacheTaskErr
 	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestUpdateRegistrationEntriesCacheMissedEvents(t *testing.T) {
+	ctx := context.Background()
+	log, _ := test.NewNullLogger()
+	clk := clock.NewMock(t)
+	ds := fakedatastore.New(t)
+
+	ef, err := NewAuthorizedEntryFetcherWithEventsBasedCache(ctx, log, clk, ds, defaultCacheReloadInterval, defaultPruneEventsOlderThan)
+	require.NoError(t, err)
+	require.NotNil(t, ef)
+
+	agentID, err := spiffeid.FromString("spiffe://example.org/myagent")
+	require.NoError(t, err)
+
+	// Ensure no entries are in there to start
+	entries, err := ef.FetchAuthorizedEntries(ctx, agentID)
+	require.NoError(t, err)
+	require.Zero(t, entries)
+
+	// Create Initial Registration Entry
+	entry, err := ds.CreateRegistrationEntry(ctx, &common.RegistrationEntry{
+		SpiffeId: "spiffe://example.org/workload",
+		ParentId: agentID.String(),
+		Selectors: []*common.Selector{
+			{
+				Type:  "workload",
+				Value: "one",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Ensure it gets added to cache
+	err = ef.updateRegistrationEntriesCache(ctx)
+	require.NoError(t, err)
+
+	entries, err = ef.FetchAuthorizedEntries(ctx, agentID)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(entries))
+
+	// Delete initial registration entry
+	_, err = ds.DeleteRegistrationEntry(ctx, entry.EntryId)
+	require.NoError(t, err)
+
+	// Delete the event for now and then add it back later to simulate out of order events
+	err = ds.DeleteRegistrationEntryEvent(ctx, 2)
+	require.NoError(t, err)
+
+	// Create Second entry
+	_, err = ds.CreateRegistrationEntry(ctx, &common.RegistrationEntry{
+		SpiffeId: "spiffe://example.org/workload2",
+		ParentId: agentID.String(),
+		Selectors: []*common.Selector{
+			{
+				Type:  "workload",
+				Value: "two",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Check second entry is added to cache
+	err = ef.updateRegistrationEntriesCache(ctx)
+	require.NoError(t, err)
+
+	entries, err = ef.FetchAuthorizedEntries(ctx, agentID)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(entries))
+
+	// Add back in deleted event
+	_, err = ds.CreateRegistrationEntryEvent(ctx, &datastore.RegistrationEntryEvent{
+		EventID: 2,
+		EntryID: entry.EntryId,
+	})
+	require.NoError(t, err)
+
+	// Make sure it gets processed and the initial entry is deleted
+	err = ef.updateRegistrationEntriesCache(ctx)
+	require.NoError(t, err)
+
+	entries, err = ef.FetchAuthorizedEntries(ctx, agentID)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(entries))
 }

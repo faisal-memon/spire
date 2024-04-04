@@ -22,14 +22,15 @@ var _ api.AuthorizedEntryFetcher = (*AuthorizedEntryFetcherWithEventsBasedCache)
 const buildCachePageSize = 10000
 
 type AuthorizedEntryFetcherWithEventsBasedCache struct {
-	cache                        *authorizedentries.Cache
-	clk                          clock.Clock
-	log                          logrus.FieldLogger
-	ds                           datastore.DataStore
-	cacheReloadInterval          time.Duration
-	pruneEventsOlderThan         time.Duration
-	lastRegistrationEntryEventID uint
-	lastAttestedNodeEventID      uint
+	cache                         *authorizedentries.Cache
+	clk                           clock.Clock
+	log                           logrus.FieldLogger
+	ds                            datastore.DataStore
+	cacheReloadInterval           time.Duration
+	pruneEventsOlderThan          time.Duration
+	lastRegistrationEntryEventID  uint
+	lastAttestedNodeEventID       uint
+	missedRegistrationEntryEvents map[uint]struct{}
 }
 
 func NewAuthorizedEntryFetcherWithEventsBasedCache(ctx context.Context, log logrus.FieldLogger, clk clock.Clock, ds datastore.DataStore, cacheReloadInterval, pruneEventsOlderThan time.Duration) (*AuthorizedEntryFetcherWithEventsBasedCache, error) {
@@ -41,14 +42,15 @@ func NewAuthorizedEntryFetcherWithEventsBasedCache(ctx context.Context, log logr
 	log.Info("Completed building event-based in-memory entry cache")
 
 	return &AuthorizedEntryFetcherWithEventsBasedCache{
-		cache:                        cache,
-		clk:                          clk,
-		log:                          log,
-		ds:                           ds,
-		cacheReloadInterval:          cacheReloadInterval,
-		pruneEventsOlderThan:         pruneEventsOlderThan,
-		lastRegistrationEntryEventID: lastRegistrationEntryEventID,
-		lastAttestedNodeEventID:      lastAttestedNodeEventID,
+		cache:                         cache,
+		clk:                           clk,
+		log:                           log,
+		ds:                            ds,
+		cacheReloadInterval:           cacheReloadInterval,
+		pruneEventsOlderThan:          pruneEventsOlderThan,
+		lastRegistrationEntryEventID:  lastRegistrationEntryEventID,
+		lastAttestedNodeEventID:       lastAttestedNodeEventID,
+		missedRegistrationEntryEvents: make(map[uint]struct{}),
 	}, nil
 }
 
@@ -104,7 +106,12 @@ func (a *AuthorizedEntryFetcherWithEventsBasedCache) updateCache(ctx context.Con
 	return errors.Join(updateRegistrationEntriesCacheErr, updateAttestedNodesCacheErr)
 }
 
+// updateRegistrationEntriesCache Fetches all the events since the last time this function was running and updates
+// the cache with all the changes.
 func (a *AuthorizedEntryFetcherWithEventsBasedCache) updateRegistrationEntriesCache(ctx context.Context) error {
+	// Pocess events skipped over previously
+	a.replayMissedRegistrationEntryEvents(ctx)
+
 	req := &datastore.ListRegistrationEntriesEventsRequest{
 		GreaterThanEventID: a.lastRegistrationEntryEventID,
 	}
@@ -115,6 +122,13 @@ func (a *AuthorizedEntryFetcherWithEventsBasedCache) updateRegistrationEntriesCa
 
 	seenMap := map[string]struct{}{}
 	for _, event := range resp.Events {
+		// If there is a gap in the event log the missed events for later processing
+		if event.EventID != a.lastRegistrationEntryEventID+1 {
+			for i := a.lastRegistrationEntryEventID + 1; i < event.EventID; i++ {
+				a.missedRegistrationEntryEvents[i] = struct{}{}
+			}
+		}
+
 		// Skip fetching entries we've already fetched this call
 		if _, seen := seenMap[event.EntryID]; seen {
 			a.lastRegistrationEntryEventID = event.EventID
@@ -122,21 +136,48 @@ func (a *AuthorizedEntryFetcherWithEventsBasedCache) updateRegistrationEntriesCa
 		}
 		seenMap[event.EntryID] = struct{}{}
 
-		commonEntry, err := a.ds.FetchRegistrationEntry(ctx, event.EntryID)
-		if err != nil {
+		// Update the cache
+		if err := a.updateRegistrationEntryCache(ctx, event.EntryID); err != nil {
 			return err
 		}
 		a.lastRegistrationEntryEventID = event.EventID
-
-		entry, err := api.RegistrationEntryToProto(commonEntry)
-		if err != nil {
-			a.cache.RemoveEntry(event.EntryID)
-			continue
-		}
-
-		a.cache.UpdateEntry(entry)
 	}
 
+	return nil
+}
+
+// replayMissedRegistrationEntryEvents Processes events that have been skipped over. Events can come out of order from
+// SQL. This function processes events that came in later than expected.
+func (a *AuthorizedEntryFetcherWithEventsBasedCache) replayMissedRegistrationEntryEvents(ctx context.Context) {
+	for eventID := range a.missedRegistrationEntryEvents {
+		log := a.log.WithField("eventID", eventID)
+		event, err := a.ds.FetchRegistrationEntryEvent(ctx, eventID)
+		if err != nil {
+			log.WithError(err).Error("Failed to fetch info about missed event")
+			continue
+		}
+		if err := a.updateRegistrationEntryCache(ctx, event.EntryID); err != nil {
+			log.WithError(err).Error("Failed to process missed event")
+			continue
+		}
+		delete(a.missedRegistrationEntryEvents, eventID)
+	}
+}
+
+// updateRegistrationEntryCache update/deletes/creates an individual registration entry in the cache.
+func (a *AuthorizedEntryFetcherWithEventsBasedCache) updateRegistrationEntryCache(ctx context.Context, entryID string) error {
+	commonEntry, err := a.ds.FetchRegistrationEntry(ctx, entryID)
+	if err != nil {
+		return err
+	}
+
+	entry, err := api.RegistrationEntryToProto(commonEntry)
+	if err != nil {
+		a.cache.RemoveEntry(entryID)
+		return nil
+	}
+
+	a.cache.UpdateEntry(entry)
 	return nil
 }
 
