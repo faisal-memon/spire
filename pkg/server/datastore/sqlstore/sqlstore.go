@@ -4096,8 +4096,31 @@ func deleteRegistrationEntryEvent(tx *gorm.DB, eventID uint) error {
 
 func listRegistrationEntriesEvents(tx *gorm.DB, req *datastore.ListRegistrationEntriesEventsRequest) (*datastore.ListRegistrationEntriesEventsResponse, error) {
 	var events []RegisteredEntryEvent
-	if err := tx.Find(&events, "id > ?", req.GreaterThanEventID).Order("id asc").Error; err != nil {
-		return nil, sqlError.Wrap(err)
+
+	if req.GreaterThanEventID != 0 && req.LessThanEventID != 0 {
+		return nil, errors.New("can't set both greater and less than event id")
+	}
+
+	if req.GreaterThanEventID != 0 || req.LessThanEventID != 0 {
+		var id uint
+		query := new(strings.Builder)
+		query.WriteString("id ")
+		if req.GreaterThanEventID != 0 {
+			query.WriteString("> ?")
+			id = req.GreaterThanEventID
+		}
+		if req.LessThanEventID != 0 {
+			query.WriteString("< ?")
+			id = req.LessThanEventID
+		}
+
+		if err := tx.Find(&events, query.String(), id).Order("id asc").Error; err != nil {
+			return nil, sqlError.Wrap(err)
+		}
+	} else {
+		if err := tx.Find(&events).Order("id asc").Error; err != nil {
+			return nil, sqlError.Wrap(err)
+		}
 	}
 
 	resp := &datastore.ListRegistrationEntriesEventsResponse{

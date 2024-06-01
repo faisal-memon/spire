@@ -38,6 +38,11 @@ type AuthorizedEntryFetcherWithEventsBasedCache struct {
 	missedAttestedNodeEvents            map[uint]time.Time
 	receivedFirstRegistrationEntryEvent bool
 	receivedFirstAttestedNodeEvent      bool
+	firstRegistrationEntryEventID       uint
+	firstAttestedNodeEventID            uint
+	firstRegistrationEntryEventTime     time.Time
+	firstAttestedNodeEventTime          time.Time
+
 }
 
 func NewAuthorizedEntryFetcherWithEventsBasedCache(ctx context.Context, log logrus.FieldLogger, clk clock.Clock, ds datastore.DataStore, cacheReloadInterval, pruneEventsOlderThan, sqlTransactionTimeout time.Duration) (*AuthorizedEntryFetcherWithEventsBasedCache, error) {
@@ -255,6 +260,12 @@ func (a *AuthorizedEntryFetcherWithEventsBasedCache) updateAttestedNodesCache(ct
 			}
 		}
 
+		if !a.receivedFirstAttestedNodeEvent {
+			a.receivedFirstAttestedNodeEvent = true
+			a.firstAttestedNodeEventID = event.EventID
+			a.firstAttestedNodeEventTime = a.clk.Now()
+		}
+
 		// Skip fetching entries we've already fetched this call
 		if _, seen := seenMap[event.SpiffeID]; seen {
 			a.lastAttestedNodeEventID = event.EventID
@@ -267,7 +278,6 @@ func (a *AuthorizedEntryFetcherWithEventsBasedCache) updateAttestedNodesCache(ct
 			return err
 		}
 		a.lastAttestedNodeEventID = event.EventID
-		a.receivedFirstAttestedNodeEvent = true
 	}
 
 	return nil
@@ -413,8 +423,12 @@ func buildAttestedNodesCache(ctx context.Context, ds datastore.DataStore, clk cl
 				missedAttestedNodeEvents[i] = clk.Now()
 			}
 		}
+		if !receivedFirstEvent {
+			receivedFirstEvent = true
+			firstEventID = event.EventID
+			firstEventTime = clk.Now()
+		}
 		lastEventID = event.EventID
-		receivedFirstEvent = true
 	}
 
 	// Build the cache
