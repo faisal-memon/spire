@@ -31,16 +31,11 @@ type AuthorizedEntryFetcherWithEventsBasedCache struct {
 	ds                                  datastore.DataStore
 	cacheReloadInterval                 time.Duration
 	pruneEventsOlderThan                time.Duration
-	sqlTransactionTimeout               time.Duration
-	lastRegistrationEntryEventID        uint
 	lastAttestedNodeEventID             uint
-	missedRegistrationEntryEvents       map[uint]time.Time
 	missedAttestedNodeEvents            map[uint]time.Time
-	receivedFirstRegistrationEntryEvent bool
-	receivedFirstAttestedNodeEvent      bool
 }
 
-func NewAuthorizedEntryFetcherWithEventsBasedCache(ctx context.Context, log logrus.FieldLogger, clk clock.Clock, ds datastore.DataStore, cacheReloadInterval, pruneEventsOlderThan, sqlTransactionTimeout time.Duration) (*AuthorizedEntryFetcherWithEventsBasedCache, error) {
+func NewAuthorizedEntryFetcherWithEventsBasedCache(ctx context.Context, log logrus.FieldLogger, clk clock.Clock, ds datastore.DataStore, cacheReloadInterval, pruneEventsOlderThan time.Duration) (*AuthorizedEntryFetcherWithEventsBasedCache, error) {
 	log.Info("Building event-based in-memory entry cache")
 	cache, receivedFirstRegistrationEntryEvent, lastRegistrationEntryEventID, missedRegistrationEntryEvents, receivedFirstAttestedNodeEvent, lastAttestedNodeEventID, missedAttestedNodeEvents, err := buildCache(ctx, ds, clk)
 	if err != nil {
@@ -55,7 +50,6 @@ func NewAuthorizedEntryFetcherWithEventsBasedCache(ctx context.Context, log logr
 		ds:                                  ds,
 		cacheReloadInterval:                 cacheReloadInterval,
 		pruneEventsOlderThan:                pruneEventsOlderThan,
-		sqlTransactionTimeout:               sqlTransactionTimeout,
 		lastRegistrationEntryEventID:        lastRegistrationEntryEventID,
 		lastAttestedNodeEventID:             lastAttestedNodeEventID,
 		missedRegistrationEntryEvents:       missedRegistrationEntryEvents,
@@ -141,9 +135,14 @@ func (a *AuthorizedEntryFetcherWithEventsBasedCache) updateCache(ctx context.Con
 	return errors.Join(updateRegistrationEntriesCacheErr, updateAttestedNodesCacheErr)
 }
 
+type registrationEntriesEvents struct {
+	lastEventID        uint
+	missedEvents       map[uint]time.Time
+}
+
 // updateRegistrationEntriesCache Fetches all the events since the last time this function was running and updates
 // the cache with all the changes.
-func (a *AuthorizedEntryFetcherWithEventsBasedCache) updateRegistrationEntriesCache(ctx context.Context) error {
+func (e *registrationEntriesEvents) updateRegistrationEntriesCache(ctx context.Context) error {
 	// Process events skipped over previously
 	a.replayMissedRegistrationEntryEvents(ctx)
 
@@ -158,10 +157,10 @@ func (a *AuthorizedEntryFetcherWithEventsBasedCache) updateRegistrationEntriesCa
 	seenMap := map[string]struct{}{}
 	for _, event := range resp.Events {
 		// If there is a gap in the event stream, log the missed events for later processing
-		if a.receivedFirstRegistrationEntryEvent && event.EventID != a.lastRegistrationEntryEventID+1 {
+		if a.lastEventID != 0  && event.EventID != a.lastRegistrationEntryEventID+1 {
 			for i := a.lastRegistrationEntryEventID + 1; i < event.EventID; i++ {
 				a.mu.Lock()
-				a.missedRegistrationEntryEvents[i] = a.clk.Now()
+				a.misseEvents[i] = a.clk.Now()
 				a.mu.Unlock()
 			}
 		}
