@@ -218,12 +218,21 @@ func (a *registrationEntries) updateCache(ctx context.Context) error {
 
 // updateCacheEntry update/deletes/creates an individual registration entry in the cache.
 func (a *registrationEntries) updateCachedEntries(ctx context.Context) error {
+	entryIds := make([]string, 0, len(a.fetchEntries))
+	fmt.Println(len(a.fetchEntries))
 	for entryId := range a.fetchEntries {
-		commonEntry, err := a.ds.FetchRegistrationEntry(ctx, entryId)
-		if err != nil {
-			continue
-		}
+		entryIds = append(entryIds, entryId)
+	}
 
+	commonEntries, err := a.ds.FetchRegistrationEntries(ctx, entryIds)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(commonEntries)
+
+	for entryId := range a.fetchEntries {
+		commonEntry := commonEntries[entryId]
 		if commonEntry == nil {
 			a.cache.RemoveEntry(entryId)
 			delete(a.fetchEntries, entryId)
@@ -238,9 +247,11 @@ func (a *registrationEntries) updateCachedEntries(ctx context.Context) error {
 			continue
 		}
 
+		fmt.Printf("Updated entry: %s", entryId)
 		a.cache.UpdateEntry(entry)
 		delete(a.fetchEntries, entryId)
 	}
+
 	return nil
 }
 
